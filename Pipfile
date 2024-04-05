@@ -9,6 +9,8 @@ ipywidgets = "*"
 pandas = "*"
 tqdm = "*"
 requests = "*"
+pyarrow = "*"
+fastparquet = "*"
 
 [dev-packages]
 

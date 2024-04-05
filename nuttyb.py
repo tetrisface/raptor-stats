@@ -107,31 +107,36 @@ wind_restrict_149 = {
 }
 
 gamesettings_common = {
-    # "ranked_game": 0, # shouldnt affect difficulty
-    "maxunits": 10000,
-    # "disablemapdamage": 1, # shouldnt affect difficulty
-    "unit_restrictions_noextractors": 1,
-    "startmetal": 10000,
-    "startenergy": 10000,
-    "startenergystorage": 10000,
-    "startmetalstorage": 10000,
-    "multiplier_builddistance": 1.5,
-    "multiplier_shieldpower": 2,
     "raptor_difficulty": "epic",
     "raptor_raptorstart": "initialbox",
-    "raptor_queentimemult": 1.3,
+    "raptor_queentimemult": 1.3,  # v 1.49 was 1.4 in 1.48
     "raptor_spawncountmult": 3,
     "raptor_firstwavesboost": 7,
     "raptor_spawntimemult": 1,
     "raptor_graceperiodmult": 2.7,
+    #
+    "commanderbuildersrange": 1000,
+    "commanderbuildersbuildpower": 1000,
+    #
+    "maxunits": 10000,
+    "unit_restrictions_noextractors": 1,
+    #
+    "multiplier_builddistance": 1.5,
+    "multiplier_shieldpower": 2,
+    #
+    "startmetal": 10000,
+    "startenergy": 10000,
+    "startmetalstorage": 10000,
+    "startenergystorage": 10000,
+    # Anything values are harder or very similar for these settings:
     # "experimentalextraunits": 1,
     # "assistdronesenabled": "enabled",
     # "commanderbuildersenabled": "enabled",
-    "commanderbuildersrange": 1000,
-    "commanderbuildersbuildpower": 1000,
-    # "experimentalshields": "bounceeverything", # easier?
-    # "releasecandidates": 1, # easier?
-    # "experimentallegionfaction": 1, # easier?
+    # "ranked_game": 0,
+    # "disablemapdamage": 1,
+    # "experimentalshields": "bounceeverything",
+    # "releasecandidates": 1, # anything else is easier
+    # "experimentallegionfaction": 1, # anything else is easier
 }
 
 gamesettings_0_grace = {
@@ -183,10 +188,42 @@ gamesettings_gauntlet = {
     },
 }
 
+gamesettings_common_148 = {
+    "raptor_queentimemult": 1.4,
+    "raptor_firstwavesboost": 4,
+}
+
+gamesettings_gauntlet_148 = {
+    **gamesettings_gauntlet,
+    **gamesettings_common_148,
+}
+
+gamesettings_rush_148 = {
+    **gamesettings_common,
+    **{
+        "raptor_queentimemult": 1.4,
+    },
+}
+
+gamesettings_zerg_148 = {
+    **gamesettings_zerg,
+    **gamesettings_common_148,
+    **{
+        "raptor_spawntimemult": 0.5,
+    },
+}
+
+# gamesettings_0_grace_148 = {
+#     **gamesettings_0_grace,
+# }
+
 gamesettings = {
-    "rush": gamesettings_common,
-    "0 grace": gamesettings_0_grace,
-    "zerg": gamesettings_zerg,
+    "Gauntlet": gamesettings_gauntlet,
     "0 grace zerg": gamesettings_0_grace_zerg,
-    "gauntlet": gamesettings_gauntlet,
+    "Zerg": gamesettings_zerg,
+    "0 grace": gamesettings_0_grace,
+    "Rush": gamesettings_common,
+    "Gauntlet 1.48": gamesettings_gauntlet_148,
+    "Zerg 1.48": gamesettings_zerg_148,
+    "Rush 1.48": gamesettings_common_148,
 }
