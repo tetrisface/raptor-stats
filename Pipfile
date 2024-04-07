@@ -12,6 +12,7 @@ requests = "*"
 pyarrow = "*"
 fastparquet = "*"
 gspread = "*"
+matplotlib = "*"
 
 [dev-packages]
 

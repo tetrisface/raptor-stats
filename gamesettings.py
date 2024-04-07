@@ -106,7 +106,7 @@ wind_restrict_149 = {
     "value": "e2FybXdpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9LGNvcndpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9LGxlZ3dpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9fQ",
 }
 
-gamesettings_common = {
+common = {
     "raptor_difficulty": "epic",
     "raptor_raptorstart": "initialbox",
     "raptor_queentimemult": 1.3,  # v 1.49 was 1.4 in 1.48
@@ -139,8 +139,8 @@ gamesettings_common = {
     # "experimentallegionfaction": 1, # anything else is easier
 }
 
-gamesettings_0_grace = {
-    **gamesettings_common,
+_0_grace = {
+    **common,
     **{
         "startmetal": 3500,
         "startenergy": 35000,
@@ -155,8 +155,8 @@ gamesettings_0_grace = {
     },
 }
 
-gamesettings_zerg = {
-    **gamesettings_common,
+zerg = {
+    **common,
     **{
         "startmetal": 3500,
         "startenergy": 3500,
@@ -171,16 +171,16 @@ gamesettings_zerg = {
     },
 }
 
-gamesettings_0_grace_zerg = {
-    **gamesettings_0_grace,
+_0_grace_zerg = {
+    **_0_grace,
     **{
         "raptor_firstwavesboost": 7,
         "raptor_spawntimemult": 0.6,
     },
 }
 
-gamesettings_gauntlet = {
-    **gamesettings_0_grace,
+gauntlet = {
+    **_0_grace,
     **{
         "raptor_raptorstart": "avoid",
         "raptor_firstwavesboost": 5,
@@ -188,7 +188,7 @@ gamesettings_gauntlet = {
     },
 }
 
-gamesettings_common_148 = {
+common_148 = {
     "raptor_difficulty": "epic",
     "raptor_raptorstart": "initialbox",
     "raptor_queentimemult": 1.4,  # 1.3 in v1.49, 1.4 in 1.48
@@ -212,41 +212,111 @@ gamesettings_common_148 = {
     "startenergystorage": 10000,
 }
 
-gamesettings_gauntlet_148 = {
-    **gamesettings_common_148,
+gauntlet_148 = {
+    **common_148,
     **{
         "raptor_firstwavesboost": 4,
         "raptor_graceperiodmult": 1.5,
     },
 }
 
-gamesettings_rush_148 = {
-    **gamesettings_common,
+rush_148 = {
+    **common,
     **{
         "raptor_queentimemult": 1.4,
     },
 }
 
-# gamesettings_0_grace_148 = {
-#     **gamesettings_0_grace,
+# _0_grace_148 = {
+#     **_0_grace,
 # }
 
-gamesettings_zerg_148 = {
-    **gamesettings_common_148,
+zerg_148 = {
+    **common_148,
     **{
         "raptor_spawntimemult": 0.5,
         "raptor_graceperiodmult": 1.5,
     },
 }
 
+regular_common_2 = {
+    "commanderbuildersrange": 1000,
+    "commanderbuildersbuildpower": 400,
+    # #
+    # "maxunits": 10000,
+    # "unit_restrictions_noextractors": 1,
+    # #
+    "multiplier_builddistance": 1,
+    "multiplier_shieldpower": 1,
+}
 
+regular_common = {
+    **regular_common_2,
+    "experimentalextraunits": 0,
+    "assistdronesenabled": "disabled",
+    "commanderbuildersenabled": "disabled",
+    "releasecandidates": 0,
+    # "experimentallegionfaction": 0, # maybe doesnt matter
+    #
+    "raptor_queentimemult": 1,
+    "raptor_spawncountmult": 5,
+    # "raptor_firstwavesboost": 7, # most doesn't change it
+    # "raptor_spawntimemult": 1, # most doesn't change it
+    # "raptor_graceperiodmult": 2.7, # maybe doesnt matter
+}
+
+
+regular_1k = {
+    **regular_common,
+    "startmetal": 1000,
+    "startenergy": 1000,
+}
+regular_5k = {
+    **regular_common,
+    "startmetal": 5000,
+    "startenergy": 5000,
+}
+regular_10k = {
+    **regular_common,
+    "startmetal": 10000,
+    "startenergy": 10000,
+}
+
+regular_extraunits = {
+    **regular_common_2,
+    "raptor_queentimemult": 1,
+    "raptor_spawncountmult": 5,
+}
+
+regular_1k_extraunits = {
+    **regular_extraunits,
+    "startmetal": 1000,
+    "startenergy": 1000,
+}
+
+regular_5k_extraunits = {
+    **regular_extraunits,
+    "startmetal": 5000,
+    "startenergy": 5000,
+}
+regular_10k_extraunits = {
+    **regular_extraunits,
+    "startmetal": 10000,
+    "startenergy": 10000,
+}
 gamesettings = {
-    "Gauntlet": gamesettings_gauntlet,
-    "0 grace zerg": gamesettings_0_grace_zerg,
-    "Zerg": gamesettings_zerg,
-    "0 grace": gamesettings_0_grace,
-    "Rush": gamesettings_common,
-    "Gauntlet 1.48": gamesettings_gauntlet_148,
-    "Zerg 1.48": gamesettings_zerg_148,
-    "Rush 1.48": gamesettings_common_148,
+    "Gauntlet": gauntlet,
+    "0 grace zerg": _0_grace_zerg,
+    "Zerg": zerg,
+    "0 grace": _0_grace,
+    "Rush": common,
+    "Gauntlet 1.48": gauntlet_148,
+    "Zerg 1.48": zerg_148,
+    "Rush 1.48": common_148,
+    "Max spawn, 1k res": regular_1k,
+    "Max spawn, 5k res": regular_5k,
+    "Max spawn, 10k res": regular_10k,
+    "Max spawn, 1k res, extraunits": regular_1k_extraunits,
+    "Max spawn, 5k res, extraunits": regular_5k_extraunits,
+    "Max spawn, 10k res, extraunits": regular_10k_extraunits,
 }
