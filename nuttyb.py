@@ -189,13 +189,35 @@ gamesettings_gauntlet = {
 }
 
 gamesettings_common_148 = {
-    "raptor_queentimemult": 1.4,
-    "raptor_firstwavesboost": 4,
+    "raptor_difficulty": "epic",
+    "raptor_raptorstart": "initialbox",
+    "raptor_queentimemult": 1.4,  # 1.3 in v1.49, 1.4 in 1.48
+    "raptor_spawncountmult": 3,
+    "raptor_firstwavesboost": 7,
+    "raptor_spawntimemult": 1,
+    "raptor_graceperiodmult": 2.7,
+    #
+    "commanderbuildersrange": 1000,
+    "commanderbuildersbuildpower": 1000,
+    #
+    "maxunits": 10000,
+    "unit_restrictions_noextractors": 1,
+    #
+    "multiplier_builddistance": 1.5,
+    "multiplier_shieldpower": 2,
+    #
+    "startmetal": 10000,
+    "startenergy": 10000,
+    "startmetalstorage": 10000,
+    "startenergystorage": 10000,
 }
 
 gamesettings_gauntlet_148 = {
-    **gamesettings_gauntlet,
     **gamesettings_common_148,
+    **{
+        "raptor_firstwavesboost": 4,
+        "raptor_graceperiodmult": 1.5,
+    },
 }
 
 gamesettings_rush_148 = {
@@ -205,17 +227,18 @@ gamesettings_rush_148 = {
     },
 }
 
-gamesettings_zerg_148 = {
-    **gamesettings_zerg,
-    **gamesettings_common_148,
-    **{
-        "raptor_spawntimemult": 0.5,
-    },
-}
-
 # gamesettings_0_grace_148 = {
 #     **gamesettings_0_grace,
 # }
+
+gamesettings_zerg_148 = {
+    **gamesettings_common_148,
+    **{
+        "raptor_spawntimemult": 0.5,
+        "raptor_graceperiodmult": 1.5,
+    },
+}
+
 
 gamesettings = {
     "Gauntlet": gamesettings_gauntlet,
