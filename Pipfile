@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 jupyter = "*"
-ipywidgets = "*"
 pandas = "*"
 tqdm = "*"
 requests = "*"
@@ -13,6 +12,7 @@ pyarrow = "*"
 fastparquet = "*"
 gspread = "*"
 matplotlib = "*"
+nbconvert = "*"
 
 [dev-packages]
 

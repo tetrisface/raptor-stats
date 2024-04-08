@@ -1,0 +1,7 @@
+{
+  "dependencies": { "@aws-sdk/client-lambda": "^3.549.0", "aws-cdk-lib": "^2.136.0" },
+  "devDependencies": {
+    "@types/node": "^20.12.5",
+    "ts-node": "^10.9.2"
+  }
+}
