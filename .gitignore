@@ -1,3 +1,11 @@
-__pycache__/*
+__pycache__
 node_modules
 build
+
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+.cdk.staging
+cdk.out

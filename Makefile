@@ -1,39 +1,37 @@
-script:
-	pipenv run jupyter nbconvert --to script raptor_stats.ipynb
-	mv raptor_stats.py build/aws
-	cp gamesettings.py build/aws
+.PHONY: requirements setup notebook-to-py run-dev-local run install install-run tail
 
-install:
-	ROOTDIR=${shell pwd}
-	pipenv install
-	pipenv clean
-	# pipenv run python -c "import site; print(site.getsitepackages()[0])"
-	cd `pipenv run  python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])'`
-	zip -r ${ROOTDIR}/build/aws/package.zip .
-	cd "${ROOTDIR}/build/aws/"
-	zip package.zip raptor_stats.py
-	# aws cloudformation package --template-file raptor_stats.yaml --s3-bucket raptor-stats --output-template-file package.yaml
+requirements:
+	asdf install
+	pip install pipenv --user --upgrade
 
-config:
-	echo "yes"
+	# curl -fsSL https://bun.sh/install | bash
+	# bun install -g aws-cdk
+	# bun install -g ts-node ?
+	bun install
+
+	# apt install zip awscli
 
 setup:
 	pipenv install
 	bun install
 
+notebook-to-py:
+	pipenv run jupyter nbconvert --to python raptor_stats.ipynb --output aws_lambda/raptor_stats.py
+
+run-dev-local:
+	ENV=dev pipenv run python ./build/aws/raptor_stats.py
+
 run:
-	pipenv run python ./build/aws/raptor_stats.py
+	aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
 
-requirements:
-	# python
-	asdf install
-	pip install pipenv --user --upgrade
+run-dev:
+	ENV=dev make run
 
+install:
+	cdk deploy
 
-	# nodejs
-	# curl -fsSL https://bun.sh/install | bash
-	# bun install -g aws-cdk
-	# bun install -g ts-node
-	bun install
+install-run:
+	make install && make run
 
-	# apt install zip # aws?
+tail:
+	aws logs tail /aws/lambda/RaptorStats --follow

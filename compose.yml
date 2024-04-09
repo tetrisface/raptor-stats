@@ -1,0 +1,17 @@
+version: '3.11'
+services:
+  test-local:
+    image: test-lambda-local:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '9000:8080'
+    # volumes:
+    # - ../../.aws-lambda-rie:/aws-lambda
+    # command: '/app/main' # Using "/app/main" as the command to execute the lambda test locally.
+    # entrypoint: /aws-lambda/aws-lambda-rie # Utilizing the RIE as the entrypoint for local lambda testing.
+    # environment:
+    #   - AWS_ACCESS_KEY_ID=your_access_key # Define the AWS Access Key ID as an environment variable.
+    #   - AWS_SECRET_ACCESS_KEY=your_secret_key # Define the AWS Secret Access Key as an environment variable.
+    #   - AWS_BUCKET_NAME=your_bucket_name # Define the AWS Bucket Name as an environment variable.

@@ -1,7 +1,26 @@
 {
-  "dependencies": { "@aws-sdk/client-lambda": "^3.549.0", "aws-cdk-lib": "^2.136.0" },
+  "name": "raptor-stats",
+  "version": "0.1.0",
+  "bin": {
+    "raptor-stats": "deploy/raptor-stats.js"
+  },
   "devDependencies": {
-    "@types/node": "^20.12.5",
-    "ts-node": "^10.9.2"
+    "@types/node": "20.11.30",
+    "aws-cdk": "2.136.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.4.3"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.136.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  },
+  "prettier": {
+    "singleQuote": true,
+    "jsxSingleQuote": true,
+    "tabWidth": 2,
+    "quoteProps": "as-needed",
+    "trailingComma": "all",
+    "semi": false
   }
 }
