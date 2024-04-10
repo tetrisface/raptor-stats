@@ -18,20 +18,28 @@ setup:
 notebook-to-py:
 	pipenv run jupyter nbconvert --to python raptor_stats.ipynb --output aws_lambda/raptor_stats.py
 
-run-dev-local:
-	ENV=dev pipenv run python ./build/aws/raptor_stats.py
-
 run:
 	aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
 
 run-dev:
-	ENV=dev make run
+	PIPENV_IGNORE_VIRTUALENVS=1 ENV=dev pipenv run python aws_lambda/index.py
 
 install:
 	cdk deploy
+
+deploy: install
 
 install-run:
 	make install && make run
 
 tail:
 	aws logs tail /aws/lambda/RaptorStats --follow
+
+upload:
+	aws s3 cp replays.parquet s3://raptor-stats-parquet/replays.parquet
+	aws s3 cp replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet
+
+download:
+	aws s3 cp s3://raptor-stats-parquet/replays.parquet .
+	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet .
+

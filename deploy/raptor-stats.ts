@@ -23,7 +23,7 @@ export class RaptorStatsStack extends cdk.Stack {
         BUCKET_NAME: bucket.bucketName,
       },
       timeout: cdk.Duration.seconds(100),
-      memorySize: 512,
+      memorySize: 1024,
       ephemeralStorageSize: cdk.Size.mebibytes(512),
       architecture: cdk.aws_lambda.Architecture.ARM_64,
     })

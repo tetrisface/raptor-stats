@@ -106,7 +106,27 @@ wind_restrict_149 = {
     "value": "e2FybXdpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9LGNvcndpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9LGxlZ3dpbj17dW5pdHJlc3RyaWN0ZWQ9MjB9fQ",
 }
 
+multipliers = {
+    "multiplier_buildpower": 1,
+    "multiplier_buildtimecost": 1,
+    "multiplier_energyconversion": 1,
+    "multiplier_energycost": 1,
+    "multiplier_energyproduction": 1,
+    "multiplier_losrange": 1,
+    "multiplier_maxdamage": 1,
+    "multiplier_maxvelocity": 1,
+    "multiplier_metalcost": 1,
+    "multiplier_metalextraction": 1,
+    "multiplier_radarrange": 1,
+    "multiplier_resourceincome": 1,
+    "multiplier_shieldpower": 1,
+    "multiplier_turnrate": 1,
+    "multiplier_weapondamage": 1,
+    "multiplier_weaponrange": 1,
+}
+
 common = {
+    **multipliers,
     "raptor_difficulty": "epic",
     "raptor_raptorstart": "initialbox",
     "raptor_queentimemult": 1.3,  # v 1.49 was 1.4 in 1.48
@@ -128,7 +148,8 @@ common = {
     "startenergy": 10000,
     "startmetalstorage": 10000,
     "startenergystorage": 10000,
-    # Anything values are harder or very similar for these settings:
+    #
+    # Any values are harder or very similar for these settings:
     # "experimentalextraunits": 1,
     # "assistdronesenabled": "enabled",
     # "commanderbuildersenabled": "enabled",
@@ -239,19 +260,14 @@ zerg_148 = {
     },
 }
 
-regular_common_2 = {
+regular_common = {
+    **multipliers,
     "commanderbuildersrange": 1000,
     "commanderbuildersbuildpower": 400,
-    # #
-    # "maxunits": 10000,
-    # "unit_restrictions_noextractors": 1,
-    # #
-    "multiplier_builddistance": 1,
-    "multiplier_shieldpower": 1,
 }
 
-regular_common = {
-    **regular_common_2,
+regular_common_no_extraunits = {
+    **regular_common,
     "experimentalextraunits": 0,
     "assistdronesenabled": "disabled",
     "commanderbuildersenabled": "disabled",
@@ -267,23 +283,23 @@ regular_common = {
 
 
 regular_1k = {
-    **regular_common,
+    **regular_common_no_extraunits,
     "startmetal": 1000,
     "startenergy": 1000,
 }
 regular_5k = {
-    **regular_common,
+    **regular_common_no_extraunits,
     "startmetal": 5000,
     "startenergy": 5000,
 }
 regular_10k = {
-    **regular_common,
+    **regular_common_no_extraunits,
     "startmetal": 10000,
     "startenergy": 10000,
 }
 
 regular_extraunits = {
-    **regular_common_2,
+    **regular_common,
     "raptor_queentimemult": 1,
     "raptor_spawncountmult": 5,
 }
@@ -319,4 +335,21 @@ gamesettings = {
     "Max spawn, 1k res, extraunits": regular_1k_extraunits,
     "Max spawn, 5k res, extraunits": regular_5k_extraunits,
     "Max spawn, 10k res, extraunits": regular_10k_extraunits,
+}
+gamesettings_scav = {
+    **{
+        difficulty: (
+            lambda settings: {
+                **{
+                    setting: value
+                    for setting, value in settings.items()
+                    if "raptor_" not in setting
+                },
+                "scav_bosstimemult": 1,
+                "scav_spawncountmult": 5,
+            }
+        )(settings)
+        for difficulty, settings in gamesettings.items()
+        if "Max spawn" in difficulty
+    },
 }
