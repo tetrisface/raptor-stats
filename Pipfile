@@ -13,6 +13,8 @@ gspread = "*"
 matplotlib = "*"
 nbconvert = "*"
 boto3 = "*"
+polars = "*"
+bpython = "*"
 
 [dev-packages]
 guppy3 = "*"

@@ -13,6 +13,16 @@
       "env": {
         "ENV": "dev"
       }
+    },
+    {
+      "name": "raptor-stats",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/aws_lambda/index.py",
+      "console": "integratedTerminal",
+      "env": {
+        "ENV": "dev"
+      }
     }
   ]
 }

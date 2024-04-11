@@ -1,15 +1,17 @@
-import polars as pl
+import pandas as pd
 import requests
 import os
 import time
 import logging
 import json
 
-from bpdb import set_trace
+from warnings import simplefilter
 
-
+simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+pd.options.mode.copy_on_write = True
 
 replays_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
@@ -21,7 +23,7 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 def get_df_s3(path):
     s3_path = bucket_path + path
     logger.info(f'fetching from s3 "{path}"')
-    _df = pl.read_parquet(s3_path)
+    _df = pd.read_parquet(s3_path)
     if dev:
         logger.info(f'writing {len(_df)} to {path}')
         _df.to_parquet(path)
@@ -33,52 +35,53 @@ def get_df(path):
         return get_df_s3(path)
     path = ('' if dev else bucket_path) + path
     logger.info(f'fetching from "{path}"')
-    return pl.read_parquet(path)
+    return pd.read_parquet(path)
 
 
 def store_df(df, path):
     path = path if dev else bucket_path + path
-    logger.info(f'would be writing to {len(df)} {path}')
+    logger.info(f'writing to {len(df)} {path}')
     df.to_parquet(path)
 
 
 def main():
     games = get_df(replays_file_name)
+    if 'id' in games.columns:
+        games = games.set_index('id')
 
-    # n_received_rows = limit = int(os.environ.get('LIMIT', 4))
-    # page = 0
-    # n_total_received_rows = 0
-    # while n_received_rows == limit and limit > 0 and page <= 2:
-    #     page += 1
-    #     apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
-    #     if page > 1:
-    #         time.sleep(1.2)
-    #     logger.info(f'fetching {apiUrl}')
-    #     replays_json = requests.get(apiUrl, headers={'User-Agent': 'tetrisface'}).json()
+    n_received_rows = limit = int(os.environ.get('LIMIT', 20))
+    page = 0
+    n_total_received_rows = 0
+    while n_received_rows == limit and limit > 0 and page <= 3:
+        page += 1
+        apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
+        if page > 1:
+            time.sleep(1.2)
+        logger.info(f'fetching {apiUrl}')
+        replays_json = requests.get(apiUrl, headers={'User-Agent': 'tetrisface'}).json()
 
-    #     data = replays_json['data']
+        data = replays_json['data']
 
-    #     api = pl.DataFrame(data)
-    #     api.drop_in_place('Map')
+        api = pd.DataFrame.from_records(data).set_index('id')
 
-    #     n_received_rows = len(api) - (games['id'] == api['id']).sum()
-    #     n_total_received_rows += n_received_rows
-    #     n_before_games = len(games)
-    #     games = pl.concat(
-    #         [
-    #             games,
-    #             api.with_columns(
-    #                 startTime=pl.col('startTime').str.to_datetime('%+', time_unit='ns')
-    #             ).select(['startTime', 'durationMs', 'AllyTeams', 'id']),
-    #         ],
-    #         how='vertical_relaxed',
-    #     )
-    #     logger.info(f'games {n_before_games} + {n_received_rows} = {len(games)}')
-    # games.rechunk()
-    del api
+        api_new_indices = api.index.difference(games.index)
+        n_received_rows = len(api_new_indices)
+        n_total_received_rows += n_received_rows
+        n_before_games = len(games)
+        if len(api_new_indices) > 0:
+            games = pd.concat(
+                [games, api.loc[api_new_indices]],
+                verify_integrity=True,
+                axis=0,
+            )
+        del api
+        logger.info(f'games {n_before_games} + {n_received_rows} = {len(games)}')
 
-    # if n_total_received_rows > 0:
-    store_df(games, replays_file_name)
+    if n_total_received_rows > 0:
+        games.startTime = pd.to_datetime(games.startTime)
+        games.durationMs = pd.to_numeric(games.durationMs, downcast='integer')
+        games.drop(['Map'], axis=1, errors='ignore', inplace=True)
+        store_df(games, replays_file_name)
 
     def is_raptors(row):
         for team in row:
@@ -86,15 +89,6 @@ def main():
                 if ai['shortName'] == 'RaptorsAI':
                     return True
         return False
-
-    games = games.with_columns(
-        raptors=pl.col('AllyTeams').map_rows(is_raptors, return_dtype=pl.Boolean)
-    )
-
-    games.with_columns(raptors=pl.when(pl.col('AllyTeams').list.contains('RaptorsAI')))
-
-    set_trace()
-    games.select(['AllyTeams']).with_columns(raptors=pl.col())
 
     def is_scavengers(row):
         for team in row:
@@ -292,7 +286,7 @@ def main():
             _df[numerical_columns] = _df[numerical_columns].fillna(0)
 
         for col in numerical_columns:
-            _df[col] = pl.to_numeric(
+            _df[col] = pd.to_numeric(
                 _df[col],
                 downcast='integer',
             )
@@ -304,7 +298,7 @@ def main():
         # & ~df_root_expanded["draw"]
     ]  # draws might be good to exclude
 
-    games['fetch_success'] = pl.Series(None, dtype='boolean')
+    games['fetch_success'] = pd.Series(None, dtype='boolean')
 
     def api_replay_detail(row):
         url = ''
@@ -340,7 +334,7 @@ def main():
     #     game_detail_path = "replays_gamesettings.parquet"
 
     # if bucket_name or os.path.exists(game_detail_path):
-    #     disk = pl.read_parquet(game_detail_path)
+    #     disk = pd.read_parquet(game_detail_path)
     #     raptor_games.loc[disk.index, disk.columns] = disk
 
     cache_df = get_df(replay_details_file_name)
@@ -482,7 +476,7 @@ def main():
 
     games['nuttyb_tweaks_exclusive'] = games.apply(is_nuttyb_tweaks_exclusive, axis=1)
 
-    games['raptor_raptorstart'] = pl.Categorical(
+    games['raptor_raptorstart'] = pd.Categorical(
         games['raptor_raptorstart'],
         ['alwaysbox', 'initialbox', 'avoid'],
         ordered=True,
@@ -541,7 +535,7 @@ def main():
     # logger.info(f'found mode { nuttyb_mode(raptor_games.loc['5bd8116605ce75f19618af055dd363a4']) }')
     # logger.info(f'found mode { nuttyb_mode(raptor_games.loc['46990c66b597eee2b2d25216620d652b']) }')
     # logger.info(f'found mode { nuttyb_mode(raptor_games.loc['ee33136637b2f15c3e72fbcf2585e796']) }')
-    games['Gamesettings Mode'] = pl.Categorical(
+    games['Gamesettings Mode'] = pd.Categorical(
         games.apply(gamesetttings_mode, axis=1),
         [
             'Gauntlet',
@@ -605,7 +599,7 @@ def main():
         )
         return ''
 
-    games['Difficulty'] = pl.Categorical(
+    games['Difficulty'] = pd.Categorical(
         games.apply(raptor_diff, axis=1),
         [
             'NuttyB Default Epicest',
@@ -646,7 +640,7 @@ def main():
         ordered=True,
     )
 
-    with pl.option_context('display.max_rows', None, 'display.max_columns', None):
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None):
         na_games_related = None
         try:
             na_games = games[
@@ -679,7 +673,7 @@ def main():
                         break
 
         if player_team_id is None or not row['awards']:
-            return pl.Series([0, 0])
+            return pd.Series([0, 0])
 
         damage = 0
         eco = 0
@@ -695,7 +689,7 @@ def main():
         except KeyError:
             eco = 0
 
-        return pl.Series([damage, eco])
+        return pd.Series([damage, eco])
 
     def links_cell(url_pairs):
         cell = f'=ifna(hyperlink("{url_pairs[0][0]}";"[{url_pairs[0][1]+1}]")'
@@ -710,7 +704,7 @@ def main():
     def grouped(to_group_df):
         if len(to_group_df) == 0:
             return to_group_df
-        all_groups = pl.DataFrame()
+        all_groups = pd.DataFrame()
         logger.info(f'grouping {len(to_group_df)} rows')
         for (group_diff, group_mode), group_df in to_group_df.groupby(
             ['Difficulty', 'Gamesettings Mode'],
@@ -772,13 +766,13 @@ def main():
                 .reset_index(drop=True)[['Player', 'Victories', '🏆DMG', '🏆ECO']]
             )
 
-            group_players.columns = pl.MultiIndex.from_tuples(
+            group_players.columns = pd.MultiIndex.from_tuples(
                 [
                     (
                         str(group_diff)
                         + (
                             ' - ' + group_mode
-                            if group_mode and not pl.isna(group_mode)
+                            if group_mode and not pd.isna(group_mode)
                             else ''
                         ),
                         second_level_columns,
@@ -788,7 +782,7 @@ def main():
             )
 
             all_groups = (
-                pl.concat(
+                pd.concat(
                     [
                         all_groups,
                         group_players,

@@ -143,7 +143,6 @@ common = {
     'raptor_graceperiodmult': 2.7,
     #
     'commanderbuildersrange': 1000,
-    'commanderbuildersbuildpower': 1000,
     #
     'unit_restrictions_noextractors': 1,
     #
@@ -165,6 +164,7 @@ common = {
     # "experimentalshields": "bounceeverything",
     # "releasecandidates": 1, # anything else is easier
     # "experimentallegionfaction": 1, # anything else is easier
+    # 'commanderbuildersbuildpower': 1000,
 }
 
 _0_grace = {
