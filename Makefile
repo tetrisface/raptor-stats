@@ -3,6 +3,7 @@
 requirements:
 	asdf install
 	pip install pipenv --user --upgrade
+	pipenv install
 
 	# curl -fsSL https://bun.sh/install | bash
 	# bun install -g aws-cdk
@@ -42,4 +43,3 @@ upload:
 download:
 	aws s3 cp s3://raptor-stats-parquet/replays.parquet .
 	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet .
-

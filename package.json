@@ -1,9 +1,6 @@
 {
   "name": "raptor-stats",
   "version": "0.1.0",
-  "bin": {
-    "raptor-stats": "deploy/raptor-stats.js"
-  },
   "devDependencies": {
     "@types/node": "20.11.30",
     "aws-cdk": "2.136.0",

@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
-import * as path from 'path'
 import { Construct } from 'constructs'
 
 export class RaptorStatsStack extends cdk.Stack {
@@ -17,14 +16,13 @@ export class RaptorStatsStack extends cdk.Stack {
     })
 
     const raptorStats = new lambda.DockerImageFunction(this, 'RaptorStats', {
-      code: lambda.DockerImageCode.fromImageAsset(path.join(__dirname, '../')),
+      code: lambda.DockerImageCode.fromImageAsset(__dirname),
       functionName: 'RaptorStats',
       environment: {
         BUCKET_NAME: bucket.bucketName,
       },
       timeout: cdk.Duration.seconds(100),
       memorySize: 1024,
-      ephemeralStorageSize: cdk.Size.mebibytes(512),
       architecture: cdk.aws_lambda.Architecture.ARM_64,
     })
     bucket.grantReadWrite(raptorStats)
