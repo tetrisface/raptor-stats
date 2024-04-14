@@ -398,11 +398,17 @@ def main():
     newWinsStartTime, newWinsStartTimeDurationMs = games.loc[
         newStarTimeMaxIndex, 'startTime':'durationMs'
     ]
+    tz_stockholm = pytz.timezone('Europe/Stockholm')
     if previousPlayerWinStartTime and newWinsStartTime <= previousPlayerWinStartTime:
-        logger.info(f'no new wins since {previousPlayerWinStartTime}')
+        logger.info(
+            f'no new wins since {previousPlayerWinStartTime.replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
+        )
+        # if not dev:
         # return
     else:
-        logger.info(f'new wins since {previousPlayerWinStartTime}: {newWinsStartTime}')
+        logger.info(
+            f'new wins since {previousPlayerWinStartTime.replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}: {newWinsStartTime.replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
+        )
 
     newWinsStartTime = newWinsStartTime.to_pydatetime()
     newWinsStartTimeDurationMs = newWinsStartTimeDurationMs.item()
@@ -869,7 +875,7 @@ def main():
 
         sheet_id = worksheet._properties['sheetId']
         spreadsheetTitle = (
-            f'Raptor Leaderboard & Stats, last win: {newWinsStartTime + datetime.timedelta(seconds=newWinsStartTimeDurationMs/1000):%Y-%m-%d %H:%M}'
+            f'Raptor Leaderboard & Stats, Last Win: {newWinsStartTime + datetime.timedelta(seconds=newWinsStartTimeDurationMs/1000):%Y-%m-%d %H:%M} UTC'
             + (' - dev test' if dev else '')
         )
         body = {

@@ -1,5 +1,5 @@
 {
-  "app": "ts-node --prefer-ts-exts deploy/raptor-stats.ts",
+  "app": "ts-node --prefer-ts-exts infrastructure.ts",
   "watch": {
     "include": ["**"],
     "exclude": [
