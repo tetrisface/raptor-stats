@@ -206,9 +206,9 @@ def main():
         for replay_id in to_fetch_ids.iter_rows():
             fetched.append(api_replay_detail(replay_id[0]))
 
-        games = cast_frame(
-            games.update(pl.DataFrame(fetched, strict=False), how='left', on='id')
-        )
+        games = games.update(pl.DataFrame(fetched, strict=False), how='left', on='id')
+
+    games = cast_frame(games)
 
     del to_fetch_ids, unfetched
 
@@ -307,10 +307,10 @@ def main():
                     # logger.info(f'value matching mode {mode_name} {setting} {row[setting]} ~= {value} higher harder {setting in higher_harder} lower harder {setting in lower_harder}')
                     match = True
                 elif row[setting] != value:
-                    # logger.info(
-                    #     f'value not matching mode {mode_name} {setting} {row[setting]} != {value}'
-                    # )
-                    # if row['id'] == '':
+                    # if row['id'] == '' and mode_name == '':
+                    #     logger.info(
+                    #         f'value not matching mode {mode_name} {setting} {row[setting]} != {value}'
+                    #     )
                     #     s()
                     match = False
                     break
