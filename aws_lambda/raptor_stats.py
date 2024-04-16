@@ -577,7 +577,7 @@ def main():
         else gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
     )
 
-    # update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
+    update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
     update_sheet(
         spreadsheet,
         grouped(players.filter(pl.col('scavengers') == True)),
@@ -668,7 +668,9 @@ def grouped(to_group_df):
                 .first()
                 .alias('Victories'),
                 pl.min('durationMs').alias('min_duration'),
-                pl.duration(seconds=pl.col('durationMs').min() / 1000).alias('⏱Time'),
+                pl.duration(minutes=pl.col('durationMs').min() / 1000 / 60).alias(
+                    '⏱Time'
+                ),
             )
             .with_columns(
                 pl.col('Player').str.to_lowercase().alias('player'),
