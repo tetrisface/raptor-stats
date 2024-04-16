@@ -283,8 +283,8 @@ def main():
         'multiplier_buildpower',
         'commanderbuildersrange',
         'commanderbuildersbuildpower',
-        'raptor_queentimemult',  # probably harder
-        'raptor_spawntimemult',
+        'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
+        'raptor_spawntimemult',  # (Time Between Waves Multiplier)
         'scav_bosstimemult',
         'scav_spawntimemult',
     }
