@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import time
+from typing import List
 
 import boto3
 import gspread
@@ -698,9 +699,6 @@ def grouped(to_group_df):
                 ]
             )
         )
-        with pl.Config(fmt_str_lengths=1000, tbl_rows=400):
-            print(group_players)
-            s()
 
         all_groups.append(
             [
@@ -739,6 +737,8 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
     for row in pl.concat(data_groups, how='horizontal').rows():
         cells = []
         for cell in row:
+            if isinstance(cell, (pl.Series, List)):
+                cell = cell[0]
             if isinstance(cell, datetime.timedelta):
                 seconds = cell.total_seconds()
                 hours, remainder = divmod(seconds, 3600)
