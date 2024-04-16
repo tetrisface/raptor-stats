@@ -173,12 +173,7 @@ def cast_frame(_df):
     logger.info(f'not casted cols: {other_cols}')
 
     _df = _df.cast(
-        {
-            **{col: str for col in _in_str_cols},
-            # **{
-            #     'durationMs': pl.Duration('ms'),
-            # },
-        }
+        {col: str for col in _in_str_cols},
     ).with_columns(
         pl.col(_in_str_cols).fill_null(''),
     )
@@ -192,7 +187,6 @@ def cast_frame(_df):
         pl.Int32,
         pl.UInt64,
         pl.Int64,
-        # pl.Float32,
         pl.Float64,
     ]
 

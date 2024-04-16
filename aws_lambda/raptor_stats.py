@@ -668,9 +668,7 @@ def grouped(to_group_df):
                 .first()
                 .alias('Victories'),
                 pl.min('durationMs').alias('min_duration'),
-                pl.duration(minutes=pl.col('durationMs').min() / 1000 / 60).alias(
-                    '⏱Time'
-                ),
+                pl.duration(minutes=pl.col('durationMs').min() / 1000 / 60).alias('⏱'),
             )
             .with_columns(
                 pl.col('Player').str.to_lowercase().alias('player'),
@@ -697,10 +695,14 @@ def grouped(to_group_df):
                     'Victories',
                     '🏆DMG',
                     '🏆ECO',
-                    '⏱Time',
+                    'min_duration',
+                    '⏱',
                 ]
             )
         )
+        with pl.Config(fmt_str_lengths=1000, tbl_rows=400):
+            print(group_players)
+            s()
 
         all_groups.append(
             [
@@ -745,11 +747,11 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
                 seconds = cell.total_seconds()
                 hours, remainder = divmod(seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                cell = re.sub(
-                    r'^0h |(^|(?<=\s))0m |(^|(?<=\s))0s',
-                    '',
-                    f'{int(hours)}h {int(minutes)}m {int(seconds)}s',
-                )
+                cell = f'{int(hours)}h {int(minutes)}m {int(seconds)}s'
+                # re.sub(
+                # r'^0h |(^|(?<=\s))0m |(^|(?<=\s))0s',
+                # '',
+                # )
             cells.append(cell)
         rows.append(cells)
 
@@ -780,7 +782,9 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
 
-    unicode_char_columns = [index for index, x in enumerate(second_header) if '🏆' in x]
+    unicode_char_columns = [
+        index for index, x in enumerate(second_header) if '🏆' in x or '⏱' in x
+    ]
     player_columns = [index for index, x in enumerate(second_header) if 'Player' in x]
 
     sheet_id = worksheet._properties['sheetId']
