@@ -117,8 +117,6 @@ numerical_columns = {
     'unit_restrictions_notech3',
     'usemapconfig',
     'usemexconfig',
-    'durationMs',
-    'fullDurationMs',
 }
 string_columns = {
     'assistdronesenabled',
@@ -174,8 +172,15 @@ def cast_frame(_df):
     other_cols = list(set(_df.columns) - set(_in_str_cols) - set(_in_num_cols))
     logger.info(f'not casted cols: {other_cols}')
 
-    _df = _df.cast({col: str for col in _in_str_cols}).with_columns(
-        pl.col(_in_str_cols).fill_null('')
+    _df = _df.cast(
+        {
+            **{col: str for col in _in_str_cols},
+            # **{
+            #     'durationMs': pl.Duration('ms'),
+            # },
+        }
+    ).with_columns(
+        pl.col(_in_str_cols).fill_null(''),
     )
 
     num_types = [

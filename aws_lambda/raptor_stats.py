@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import os
+import re
 import time
 
 import boto3
@@ -206,10 +207,8 @@ def main():
         for replay_id in to_fetch_ids.iter_rows():
             fetched.append(api_replay_detail(replay_id[0]))
 
-        games = cast_frame(
-            games.update(pl.DataFrame(fetched, strict=False), how='left', on='id')
-        )
-
+        games = games.update(pl.DataFrame(fetched, strict=False), how='left', on='id')
+    games = cast_frame(games)
     del to_fetch_ids, unfetched
 
     # del raptors_detail_api
@@ -577,7 +576,7 @@ def main():
         else gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
     )
 
-    update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
+    # update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
     update_sheet(
         spreadsheet,
         grouped(players.filter(pl.col('scavengers') == True)),
@@ -667,6 +666,8 @@ def grouped(to_group_df):
                 )
                 .first()
                 .alias('Victories'),
+                pl.min('durationMs').alias('min_duration'),
+                pl.duration(seconds=pl.col('durationMs').min() / 1000).alias('⏱Time'),
             )
             .with_columns(
                 pl.col('Player').str.to_lowercase().alias('player'),
@@ -676,12 +677,14 @@ def grouped(to_group_df):
                     'n_victories',
                     'awards_sum',
                     '🏆DMG',
+                    'min_duration',
                     'player',
                 ],
                 descending=[
                     True,
                     True,
                     True,
+                    False,
                     False,
                 ],
             )
@@ -691,9 +694,13 @@ def grouped(to_group_df):
                     'Victories',
                     '🏆DMG',
                     '🏆ECO',
+                    '⏱Time',
                 ]
             )
         )
+        with pl.Config(fmt_str_lengths=1000, tbl_rows=400):
+            print(group_players)
+            s()
 
         all_groups.append(
             [
@@ -713,23 +720,45 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
 
     top_header, data_groups = zip(*groups)
 
-    second_header = data_groups[0].columns * len(data_groups)
+    data_columns = data_groups[0].columns
+
+    len_data_columns = len(data_columns)
+
+    second_header = data_columns * len(data_groups)
 
     top_header = list(top_header)
-    top_header_expanded = [''] * int(3 / 4 * len(second_header))
+    top_header_expanded = [''] * int(
+        (len_data_columns - 1) / len_data_columns * len(second_header)
+    )
     for i in range(0, len(second_header)):
-        if i % 4 == 0:
+        if i % len_data_columns == 0:
             top_header_expanded.insert(i, top_header.pop(0))
 
-    data_values = pl.concat(data_groups, how='horizontal').rows()
-    values = [top_header_expanded] + [second_header] + data_values
+    # rows = pl.concat(data_groups, how='horizontal').rows()
+    rows = []
+    for row in pl.concat(data_groups, how='horizontal').rows():
+        cells = []
+        for cell in row:
+            if isinstance(cell, datetime.timedelta):
+                seconds = cell.total_seconds()
+                hours, remainder = divmod(seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                cell = re.sub(
+                    r'^0h |(^|(?<=\s))0m |(^|(?<=\s))0s',
+                    '',
+                    f'{int(hours)}h {int(minutes)}m {int(seconds)}s',
+                )
+            cells.append(cell)
+        rows.append(cells)
 
-    len_data_values = len(data_values) + 2
+    values = [top_header_expanded] + [second_header] + rows
+
+    sheet_rows = len(rows) + 2
     len_second_header = len(second_header)
 
     sheet_name = datetime.date.today().strftime('%Y-%m') + sheet_name_postfix
     logger.info(
-        f"updating sheet '{sheet_name}', {len_data_values} rows, {len_second_header} cols"
+        f"updating sheet '{sheet_name}', {sheet_rows} rows, {len_second_header} cols"
     )
     new_sheet = False
     try:
@@ -738,7 +767,7 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(
             title=sheet_name,
-            rows=len_data_values,
+            rows=sheet_rows,
             cols=len_second_header,
             index=0,
         )
