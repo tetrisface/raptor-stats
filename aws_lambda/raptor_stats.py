@@ -123,7 +123,7 @@ def main():
             if team['winningTeam'] is True:
                 if len(team['Players']) > 0:
                     _winners.extend([player['name'] for player in team['Players']])
-                elif len(team['AIs']) > 0:
+                if len(team['AIs']) > 0:
                     _winners.extend([ai['shortName'] for ai in team['AIs']])
         return _winners
 
@@ -141,6 +141,9 @@ def main():
         draw=pl.col('AllyTeams').map_elements(is_draw, return_dtype=pl.Boolean),
         winners=pl.col('AllyTeams').map_elements(_winners, return_dtype=pl.List(str)),
         players=pl.col('AllyTeams').map_elements(players, return_dtype=pl.List(str)),
+    ).with_columns(
+        raptors_win=pl.col('winners').list.contains('RaptorsAI'),
+        scavengers_win=pl.col('winners').list.contains('ScavengersAI'),
     )
 
     games = games.filter(
@@ -160,12 +163,11 @@ def main():
         return games.filter(
             (
                 pl.col('winners')
-                .list.set_intersection(['RaptorsAI', 'ScavengersAI'])
+                .list.set_difference(['RaptorsAI', 'ScavengersAI'])
                 .list.len()
-                == 0
+                > 0
             )
             & (pl.col('draw') == False)
-            & (pl.col('winners').list.len() > 0)
         )
 
     previousPlayerWinStartTime = (
@@ -206,9 +208,9 @@ def main():
         for replay_id in to_fetch_ids.iter_rows():
             fetched.append(api_replay_detail(replay_id[0]))
 
-        games = games.update(pl.DataFrame(fetched, strict=False), how='left', on='id')
-
-    games = cast_frame(games)
+        games = games.update(
+            cast_frame(pl.DataFrame(fetched, strict=False)), how='left', on='id'
+        )
 
     del to_fetch_ids, unfetched
 
@@ -382,10 +384,14 @@ def main():
 
         elif row['nuttyb_hp']:
             return f'NuttyB HP {row["nuttyb_hp"]}'
-        elif row['raptors'] and row['raptor_difficulty']:
+        elif row['raptors'] and not row['raptors_win'] and row['raptor_difficulty']:
             return f'Raptors {format_regular_diff(row["raptor_difficulty"])}'
-        elif row['scavengers'] and row['scav_difficulty']:
+        elif row['scavengers'] and not row['raptors_win'] and row['scav_difficulty']:
             return f'Scavengers {format_regular_diff(row["scav_difficulty"])}'
+        elif (row['raptors'] or row['scavengers']) and (
+            row['raptors_win'] or row['scavengers_win']
+        ):
+            return 'Mixed AIs'
         logger.warning(
             'no diff found for',
             row[
@@ -500,6 +506,7 @@ def main():
             'Scavengers Easy',
             'Scavengers Very Easy',
             'Scavengers "Missing"',
+            'Mixed AIs',
         ],
     )
 
@@ -547,9 +554,7 @@ def main():
     players = (
         games.explode('players')
         .rename({'players': 'Player'})
-        .filter(
-            pl.col('Player').list.set_intersection(pl.col('winners')).list.len() == 1
-        )
+        .filter(pl.col('winners').list.contains(pl.col('Player')))
     )
     del games
 
@@ -578,6 +583,7 @@ def main():
     )
 
     update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
+    players = players.filter(pl.col('Difficulty') != 'Mixed AIs')
     update_sheet(
         spreadsheet,
         grouped(players.filter(pl.col('scavengers') == True)),
@@ -601,6 +607,7 @@ def main():
         ' NuttyB',
         newMaxEndTime,
     )
+
     return 'done'
 
 
