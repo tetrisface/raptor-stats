@@ -43,3 +43,7 @@ upload:
 download:
 	aws s3 cp s3://raptor-stats-parquet/replays.parquet .
 	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet .
+
+backup:
+	aws s3 cp s3://raptor-stats-parquet/replays.parquet s3://raptor-stats-parquet/replays.parquet.bak
+	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet.bak

@@ -46,6 +46,23 @@ export class RaptorStatsStack extends cdk.Stack {
     eventRule.addTarget(new cdk.aws_events_targets.LambdaFunction(raptorStats))
 
     gcpSecret.grantRead(raptorStats)
+
+    // const alarm = new cloudwatch.Alarm(this, 'CloudWatchAlarm', {
+    //   alarmName: 'OverAgreedLimitWarningAlarm',
+    //   alarmDescription: 'Warning 400 with OverAgreedLimit Warning',
+    //   metric: metricFilter.metric(),
+    //   threshold: 1,
+    //   comparisonOperator:
+    //     cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    //   evaluationPeriods: 1,
+    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    // })
+
+    // // create our sns topic for our alarm
+    // const topic = new sns.Topic(this, 'AlarmTopic', {
+    //   displayName: 'OverAgreedLimitWarningAlarmTopic',
+    //   topicName: 'OverAgreedLimitWarningAlarmTopic',
+    // })
   }
 }
 

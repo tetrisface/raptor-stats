@@ -4,18 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-jupyter = "*"
-pandas = "*"
-tqdm = "*"
 requests = "*"
-pyarrow = "*"
 gspread = "*"
-matplotlib = "*"
-nbconvert = "*"
 boto3 = "*"
 pytz = "*"
 polars = "*"
 bpython = "*"
+s3fs = "*"
 
 [dev-packages]
 guppy3 = "*"
