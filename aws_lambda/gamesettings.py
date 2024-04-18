@@ -75,6 +75,15 @@ various = (
 )
 
 defaults = {
+    # Restrictions
+    'maxunits': 10000,  # default for nuttyb (2000 otherwise) # TODO: investigate
+    'unit_restrictions_nonukes': 0,
+    'unit_restrictions_noextractors': 1,  # default for nuttyb (0 otherwise)
+    'unit_restrictions_notacnukes': 0,
+    'unit_restrictions_noendgamelrpc': 0,
+    'unit_restrictions_nolrpc': 0,
+    'unit_restrictions_noair': 0,
+    # Unit Modifiers
     'multiplier_buildpower': 1,
     'multiplier_buildtimecost': 1,
     'multiplier_energyconversion': 1,
@@ -91,31 +100,27 @@ defaults = {
     'multiplier_turnrate': 1,
     'multiplier_weapondamage': 1,
     'multiplier_weaponrange': 1,
+    # Extras
     'assistdronesbuildpowermultiplier': 1,
-    'unit_restrictions_nonukes': 0,
-    # not sure if these are needed:
-    'unit_restrictions_notacnukes': 0,
-    'unit_restrictions_noendgamelrpc': 0,
-    'unit_restrictions_nolrpc': 0,
-    'unit_restrictions_noair': 0,
+    'commanderbuildersrange': 1000,
+    'commanderbuildersbuildpower': 400,
 }
 
-common = {
+rush_148 = {
     **defaults,
+    'multiplier_builddistance': 1.5,
+    'multiplier_shieldpower': 2,
+    #
     'raptor_difficulty': 'epic',
     'raptor_raptorstart': 'initialbox',
-    'raptor_queentimemult': 1.3,  # v 1.49 was 1.4 in 1.48
+    'raptor_queentimemult': 1.4,  # 1.3 in v1.49, 1.4 in 1.48
     'raptor_spawncountmult': 3,
     'raptor_firstwavesboost': 7,
     'raptor_spawntimemult': 1,
     'raptor_graceperiodmult': 2.7,
     #
     'commanderbuildersrange': 1000,
-    #
-    'unit_restrictions_noextractors': 1,
-    #
-    'multiplier_builddistance': 1.5,
-    'multiplier_shieldpower': 2,
+    'commanderbuildersbuildpower': 1000,
     #
     'startmetal': 10000,
     'startenergy': 10000,
@@ -132,11 +137,15 @@ common = {
     # "experimentalshields": "bounceeverything",
     # "releasecandidates": 1, # anything else is easier
     # "experimentallegionfaction": 1, # anything else is easier
-    # 'commanderbuildersbuildpower': 1000,
 }
 
-_0_grace = {
-    **common,
+rush_149 = {
+    **rush_148,
+    'raptor_queentimemult': 1.3,  # v 1.49 was 1.4 in 1.48
+}
+
+_0_grace_149 = {
+    **rush_149,
     **{
         'startmetal': 3500,
         'startenergy': 35000,
@@ -151,8 +160,8 @@ _0_grace = {
     },
 }
 
-zerg = {
-    **common,
+zerg_149 = {
+    **rush_149,
     **{
         'startmetal': 3500,
         'startenergy': 3500,
@@ -167,16 +176,16 @@ zerg = {
     },
 }
 
-_0_grace_zerg = {
-    **_0_grace,
+_0_grace_zerg_148_149 = {
+    **_0_grace_149,
     **{
         'raptor_firstwavesboost': 7,
         'raptor_spawntimemult': 0.6,
     },
 }
 
-gauntlet = {
-    **_0_grace,
+gauntlet_149 = {
+    **_0_grace_149,
     **{
         'raptor_raptorstart': 'avoid',
         'raptor_firstwavesboost': 5,
@@ -184,42 +193,11 @@ gauntlet = {
     },
 }
 
-common_148 = {
-    'raptor_difficulty': 'epic',
-    'raptor_raptorstart': 'initialbox',
-    'raptor_queentimemult': 1.4,  # 1.3 in v1.49, 1.4 in 1.48
-    'raptor_spawncountmult': 3,
-    'raptor_firstwavesboost': 7,
-    'raptor_spawntimemult': 1,
-    'raptor_graceperiodmult': 2.7,
-    #
-    'commanderbuildersrange': 1000,
-    'commanderbuildersbuildpower': 1000,
-    #
-    'maxunits': 10000,
-    'unit_restrictions_noextractors': 1,
-    #
-    'multiplier_builddistance': 1.5,
-    'multiplier_shieldpower': 2,
-    #
-    'startmetal': 10000,
-    'startenergy': 10000,
-    'startmetalstorage': 10000,
-    'startenergystorage': 10000,
-}
-
 gauntlet_148 = {
-    **common_148,
+    **rush_148,
     **{
         'raptor_firstwavesboost': 4,
         'raptor_graceperiodmult': 1.5,
-    },
-}
-
-rush_148 = {
-    **common,
-    **{
-        'raptor_queentimemult': 1.4,
     },
 }
 
@@ -228,7 +206,7 @@ rush_148 = {
 # }
 
 zerg_148 = {
-    **common_148,
+    **rush_148,
     **{
         'raptor_spawntimemult': 0.5,
         'raptor_graceperiodmult': 1.5,
@@ -237,8 +215,19 @@ zerg_148 = {
 
 regular_common = {
     **defaults,
+    # Restrictions
+    'maxunits': 2000,
+    'unit_restrictions_noextractors': 0,
+    # Raptors
+    'raptor_queentimemult': 1,
+    'raptor_spawncountmult': 5,
+    # Extras
     'commanderbuildersrange': 1000,
     'commanderbuildersbuildpower': 400,
+    # "experimentallegionfaction": 0, # maybe doesnt matter
+    # "raptor_firstwavesboost": 7, # most doesn't change it
+    # "raptor_spawntimemult": 1, # most doesn't change it
+    # "raptor_graceperiodmult": 2.7, # maybe doesnt matter
 }
 
 regular_common_no_extraunits = {
@@ -247,15 +236,7 @@ regular_common_no_extraunits = {
     'assistdronesenabled': 'disabled',
     'commanderbuildersenabled': 'disabled',
     'releasecandidates': 0,
-    # "experimentallegionfaction": 0, # maybe doesnt matter
-    #
-    'raptor_queentimemult': 1,
-    'raptor_spawncountmult': 5,
-    # "raptor_firstwavesboost": 7, # most doesn't change it
-    # "raptor_spawntimemult": 1, # most doesn't change it
-    # "raptor_graceperiodmult": 2.7, # maybe doesnt matter
 }
-
 
 regular_1k = {
     **regular_common_no_extraunits,
@@ -273,37 +254,31 @@ regular_10k = {
     'startenergy': 10000,
 }
 
-regular_extraunits = {
-    **regular_common,
-    'raptor_queentimemult': 1,
-    'raptor_spawncountmult': 5,
-}
-
 regular_1k_extraunits = {
-    **regular_extraunits,
+    **regular_common,
     'startmetal': 1000,
     'startenergy': 1000,
 }
 
 regular_5k_extraunits = {
-    **regular_extraunits,
+    **regular_common,
     'startmetal': 5000,
     'startenergy': 5000,
 }
 regular_10k_extraunits = {
-    **regular_extraunits,
+    **regular_common,
     'startmetal': 10000,
     'startenergy': 10000,
 }
 gamesettings = {
-    'Gauntlet': gauntlet,
-    '0 grace zerg': _0_grace_zerg,
-    'Zerg': zerg,
-    '0 grace': _0_grace,
-    'Rush': common,
+    'Gauntlet': gauntlet_149,
+    '0 grace zerg': _0_grace_zerg_148_149,
+    'Zerg': zerg_149,
+    '0 grace': _0_grace_149,
+    'Rush': rush_149,
     'Gauntlet 1.48': gauntlet_148,
     'Zerg 1.48': zerg_148,
-    'Rush 1.48': common_148,
+    'Rush 1.48': rush_148,
     'Max spawn, 1k res': regular_1k,
     'Max spawn, 5k res': regular_5k,
     'Max spawn, 10k res': regular_10k,

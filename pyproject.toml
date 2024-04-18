@@ -1,5 +1,37 @@
+[tool.pyright]
+# pylance
+exclude = [
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git-rewrite",
+    ".git",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "buck-out",
+    "build",
+    "cdk.out",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
 [tool.ruff]
-# Exclude a variety of commonly ignored directories.
 exclude = [
     "__pycache__",
     "__pypackages__",

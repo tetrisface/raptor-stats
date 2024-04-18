@@ -59,10 +59,10 @@ def store_df(df, path):
 def main():
     games = get_df(replays_file_name)
 
-    n_received_rows = limit = int(os.environ.get('LIMIT', 2 if dev else 20))
+    n_received_rows = limit = int(os.environ.get('LIMIT', 222 if dev else 400))
     page = 1
     n_total_received_rows = 0
-    while n_received_rows == limit and limit > 0 and page <= (1 if dev else 30):
+    while n_received_rows > 1 and limit > 0 and page <= (1 if dev else 100):
         apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
         if page > 1:
             time.sleep(1.2)
@@ -133,21 +133,38 @@ def main():
             _players.extend([player['name'] for player in team['Players']])
         return _players
 
-    games = games.with_columns(
-        raptors=pl.col('AllyTeams').map_elements(is_raptors, return_dtype=pl.Boolean),
-        scavengers=pl.col('AllyTeams').map_elements(
-            is_scavengers, return_dtype=pl.Boolean
-        ),
-        draw=pl.col('AllyTeams').map_elements(is_draw, return_dtype=pl.Boolean),
-        winners=pl.col('AllyTeams').map_elements(_winners, return_dtype=pl.List(str)),
-        players=pl.col('AllyTeams').map_elements(players, return_dtype=pl.List(str)),
-    ).with_columns(
-        raptors_win=pl.col('winners').list.contains('RaptorsAI'),
-        scavengers_win=pl.col('winners').list.contains('ScavengersAI'),
-    )
-
-    games = games.filter(
-        (pl.col('raptors') | pl.col('scavengers') & (pl.col('draw') == False))
+    games = (
+        games.with_columns(
+            raptors=pl.col('AllyTeams').map_elements(
+                is_raptors, return_dtype=pl.Boolean
+            ),
+            scavengers=pl.col('AllyTeams').map_elements(
+                is_scavengers, return_dtype=pl.Boolean
+            ),
+            draw=pl.col('AllyTeams').map_elements(is_draw, return_dtype=pl.Boolean),
+            winners=pl.col('AllyTeams').map_elements(
+                _winners, return_dtype=pl.List(str)
+            ),
+            players=pl.col('AllyTeams').map_elements(
+                players, return_dtype=pl.List(str)
+            ),
+        )
+        .with_columns(
+            raptors_win=pl.col('winners').list.contains('RaptorsAI'),
+            scavengers_win=pl.col('winners').list.contains('ScavengersAI'),
+        )
+        .filter(
+            (
+                (pl.col('raptors') | pl.col('scavengers'))
+                & (pl.col('draw') == False)
+                & (
+                    pl.col('winners')
+                    .list.set_difference(['RaptorsAI', 'ScavengersAI'])
+                    .list.len()
+                    > 0
+                )
+            )
+        )
     )
 
     games = games.rename({'AllyTeams': 'AllyTeamsList'})
@@ -159,20 +176,8 @@ def main():
     )
     del replay_details_cache
 
-    def PlayerWinGameFilter(_games):
-        return games.filter(
-            (
-                pl.col('winners')
-                .list.set_difference(['RaptorsAI', 'ScavengersAI'])
-                .list.len()
-                > 0
-            )
-            & (pl.col('draw') == False)
-        )
-
-    previousPlayerWinStartTime = (
-        PlayerWinGameFilter(games).select(pl.col('startTime').max()).item()
-    )
+    previousPlayerWinStartTime = games.select(pl.col('startTime')).max().item()
+    logger.info(f'previousPlayerWinStartTime: {previousPlayerWinStartTime}')
 
     def api_replay_detail(_replay_id):
         replay_details = {}
@@ -196,12 +201,19 @@ def main():
         return replay_details
 
     # fetch new
-    unfetched = games.filter(pl.col('fetch_success').is_null()).select('id')
+    unfetched = (
+        games.filter(pl.col('fetch_success').is_null())
+        .sort(by='startTime', descending=True)
+        .select('id')
+    )
     to_fetch_ids = unfetched[: 2 if dev else 30]
+    # to_fetch_ids = unfetched[-3:]
     if len(to_fetch_ids) == 0:
+        newGames = False
         logger.info('no new games to fetch')
         # return
     else:
+        newGames = True
         logger.info(f'fetching {len(to_fetch_ids)} of {len(unfetched)} missing games')
 
         fetched = []
@@ -227,7 +239,6 @@ def main():
     store_df(games, replay_details_file_name)
 
     # stop without any new wins
-    games = PlayerWinGameFilter(games)
     newMaxStartTime, newMaxEndTime = games.select(
         pl.col('startTime'),
         ((pl.col('startTime') + pl.col('durationMs') * 1000000) / 1000)
@@ -238,16 +249,18 @@ def main():
     previousStockholm = previousPlayerWinStartTime.replace(tzinfo=pytz.utc).astimezone(
         tz_stockholm
     )
+
     if (
         previousPlayerWinStartTime
         and newMaxStartTime.item() <= previousPlayerWinStartTime
+        and not newGames
     ):
         logger.info(f'no new wins since {previousStockholm}')
-        if not dev:
-            return
+        # if not dev:
+        #     return
     else:
         logger.info(
-            f'new wins since {previousStockholm}: {newMaxStartTime.replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
+            f'new wins since {previousStockholm}: {newMaxStartTime.item().replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
         )
 
     from gamesettings import (
@@ -271,6 +284,7 @@ def main():
     higher_harder = {
         'raptor_spawncountmult',
         'raptor_firstwavesboost',
+        'maxunits',
         # 'raptor_raptorstart', # uncertain
     }
     lower_harder = {
@@ -352,7 +366,7 @@ def main():
 
     def format_regular_diff(string):
         if string is None:
-            return '"Missing"'
+            return '"Missing Details"'
         return string.replace('very', 'very ').title()
 
     nuttyb_exclusive_modes = {
@@ -380,7 +394,7 @@ def main():
             elif row['raptor_difficulty']:
                 return f"NuttyB Main & {format_regular_diff(row['raptor_difficulty'])}"
             else:
-                return 'NuttyB Main "Missing"'
+                return 'NuttyB Main "Missing Details"'
 
         elif row['nuttyb_hp']:
             return f'NuttyB HP {row["nuttyb_hp"]}'
@@ -392,10 +406,15 @@ def main():
             row['raptors_win'] or row['scavengers_win']
         ):
             return 'Mixed AIs'
-        logger.warning(
-            'no diff found for',
-            row[
-                [
+
+        if not dev:
+            _dict = {
+                key: value
+                for key, value in row.items()
+                if key
+                in [
+                    'id',
+                    'startTime',
                     'nuttyb_main',
                     'nuttyb_hp',
                     'nuttyb_tweaks_exclusive',
@@ -404,8 +423,10 @@ def main():
                     'raptors',
                     'scavengers',
                 ]
-            ],
-        )
+            }
+            logger.warning(
+                f'no diff found for {_dict}',
+            )
         return ''
 
     games = games.with_columns(
@@ -491,22 +512,23 @@ def main():
             'NuttyB Main & Normal',
             'NuttyB Main & Easy',
             'NuttyB Main & Very Easy',
-            'NuttyB Main "Missing"',
+            'NuttyB Main "Missing Details"',
             'Raptors Epic',
             'Raptors Very Hard',
             'Raptors Hard',
             'Raptors Normal',
             'Raptors Easy',
             'Raptors Very Easy',
-            'Raptors "Missing"',
+            'Raptors "Missing Details"',
             'Scavengers Epic',
             'Scavengers Very Hard',
             'Scavengers Hard',
             'Scavengers Normal',
             'Scavengers Easy',
             'Scavengers Very Easy',
-            'Scavengers "Missing"',
+            'Scavengers "Missing Details"',
             'Mixed AIs',
+            '',
         ],
     )
 
@@ -662,6 +684,7 @@ def grouped(to_group_df):
                 pl.sum('🏆DMG').str.replace(r'^0$', ''),
                 pl.sum('🏆ECO').str.replace(r'^0$', ''),
                 pl.col('id')
+                .sort_by('startTime', descending=False)
                 .map_batches(
                     lambda replay_ids: links_cell(
                         [
@@ -731,12 +754,12 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
     data_values = pl.concat(data_groups, how='horizontal').rows()
     values = [top_header_expanded] + [second_header] + data_values
 
-    len_data_values = len(data_values) + 2
+    n_rows = len(data_values) + 2
     len_second_header = len(second_header)
 
     sheet_name = datetime.date.today().strftime('%Y-%m') + sheet_name_postfix
     logger.info(
-        f"updating sheet '{sheet_name}', {len_data_values} rows, {len_second_header} cols"
+        f"updating sheet '{sheet_name}', {n_rows} rows, {len_second_header} cols"
     )
     new_sheet = False
     try:
@@ -745,7 +768,7 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = spreadsheet.add_worksheet(
             title=sheet_name,
-            rows=len_data_values,
+            rows=n_rows,
             cols=len_second_header,
             index=0,
         )
