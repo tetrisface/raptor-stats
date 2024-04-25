@@ -59,7 +59,7 @@ def store_df(df, path):
 def main():
     games = get_df(replays_file_name)
 
-    n_received_rows = limit = int(os.environ.get('LIMIT', 222 if dev else 400))
+    n_received_rows = limit = int(os.environ.get('LIMIT', 2 if dev else 400))
     page = 1
     n_total_received_rows = 0
     while n_received_rows > 1 and limit > 0 and page <= (1 if dev else 100):
@@ -182,7 +182,8 @@ def main():
     def api_replay_detail(_replay_id):
         replay_details = {}
         url = ''
-        time.sleep(1.2)
+        if not dev:
+            time.sleep(1.2)
         if _replay_id is not None:
             url = f'https://api.bar-rts.com/replays/{_replay_id}'
             logger.info(f'fetching {url}')
@@ -211,7 +212,8 @@ def main():
     if len(to_fetch_ids) == 0:
         newGames = False
         logger.info('no new games to fetch')
-        # return
+        if not dev:
+            return
     else:
         newGames = True
         logger.info(f'fetching {len(to_fetch_ids)} of {len(unfetched)} missing games')
@@ -256,8 +258,8 @@ def main():
         and not newGames
     ):
         logger.info(f'no new wins since {previousStockholm}')
-        # if not dev:
-        #     return
+        if not dev:
+            return
     else:
         logger.info(
             f'new wins since {previousStockholm}: {newMaxStartTime.item().replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
@@ -282,6 +284,7 @@ def main():
     any_nuttyb_tweaks_or_empty = all_nuttyb_tweaks + ['']
 
     higher_harder = {
+        'unit_restrictions_noextractors',
         'raptor_spawncountmult',
         'raptor_firstwavesboost',
         'maxunits',
@@ -304,12 +307,12 @@ def main():
     }
 
     def gamesettings_mode(row):
-        if row['scavengers']:
-            ai_gamesettings = gamesettings_scav
-            ai_start_setting_name = 'scav_scavstart'
-        else:
+        if row['raptors']:
             ai_gamesettings = gamesettings
             ai_start_setting_name = 'raptor_raptorstart'
+        else:
+            ai_gamesettings = gamesettings_scav
+            ai_start_setting_name = 'scav_scavstart'
 
         for mode_name, settings in ai_gamesettings.items():
             match = False
@@ -323,7 +326,11 @@ def main():
                     # logger.info(f'value matching mode {mode_name} {setting} {row[setting]} ~= {value} higher harder {setting in higher_harder} lower harder {setting in lower_harder}')
                     match = True
                 elif row[setting] != value:
-                    # if row['id'] == '' and mode_name == '':
+                    # troubleshoot debug replay_id
+                    # if (
+                    #     row['id'] == 'e3842966b8373248b883e4dee6269114'
+                    #     # and mode_name == 'Rush'
+                    # ):
                     #     logger.info(
                     #         f'value not matching mode {mode_name} {setting} {row[setting]} != {value}'
                     #     )
@@ -381,7 +388,7 @@ def main():
     }
 
     def Difficulty(row):
-        # if row['id'] == '':
+        # if row['id'] == 'e3842966b8373248b883e4dee6269114':
         #     s()
         if (
             row['nuttyb_tweaks_exclusive']
@@ -488,6 +495,28 @@ def main():
             > 0
         ),
     )
+
+    # troubleshoot debug default
+    # extra_tweaks = (
+    #     games.filter(pl.col('id') == 'e3842966b8373248b883e4dee6269114')
+    #     .select(
+    #         pl.concat_list(possible_tweak_columns)
+    #         .list.set_difference(any_nuttyb_tweaks_or_empty)
+    #         .alias('extra tweaks')
+    #     )
+    #     .to_series()
+    #     .to_list()[0]
+    # )
+    # if len(extra_tweaks) > 0:
+    #     print(f'len extra tweaks {len(extra_tweaks)}')
+
+    #     import subprocess
+
+    #     cmd = f'echo "{extra_tweaks[0].strip()}" | /mnt/c/Windows/System32/clip.exe'
+    #     subprocess.check_call(cmd, shell=True)
+    #     s()
+    # else:
+    #     print('no extra tweaks')
 
     difficulty_enum = pl.Enum(
         [
