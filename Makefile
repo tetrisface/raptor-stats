@@ -1,16 +1,16 @@
-.PHONY: requirements setup notebook-to-py run-dev-local run install install-run tail
+.PHONY: requirements setup notebook-to-py run-dev run install install-run tail
 
 requirements:
-	asdf install
-	pip install pipenv --user --upgrade
+	asdf install # https://asdf-vm.com/guide/getting-started.html
+	# pip install pipenv --user --upgrade
+	sudo -H pip install pipenv --user --upgrade
 	pipenv install
 
-	# curl -fsSL https://bun.sh/install | bash
-	# bun install -g aws-cdk
-	# bun install -g ts-node ?
+	curl -fsSL https://bun.sh/install | bash
+	bun install -g aws-cdk ts-node
 	bun install
 
-	# apt install zip awscli
+	apt install zip awscli
 
 setup:
 	pipenv install

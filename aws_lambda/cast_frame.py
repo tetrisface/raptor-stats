@@ -31,10 +31,15 @@ numerical_columns = {
     'disablemapdamage',
     'dominationscore',
     'dominationscoretime',
+    'durationMs',
     'easter_egg_hunt',
     'easteregghunt',
     'emprework',
+    'energy_share_rework',
     'energyperpoint',
+    'evocom',
+    'evocomleveluprate',
+    'evocomxpmultiplier',
     'experimentalextraunits',
     'experimentalimprovedtransports',
     'experimentallegionfaction',
@@ -49,6 +54,9 @@ numerical_columns = {
     'faction_limiter',
     'ffa_wreckage',
     'fixedallies',
+    'forceallunits',
+    'fullDurationMs',
+    'junorework',
     'lategame_rebalance',
     'limitscore',
     'map_atmosphere',
@@ -106,6 +114,7 @@ numerical_columns = {
     'teamffa_start_boxes_shuffle',
     'tugofwarmodifier',
     'unified_maxslope',
+    'unit_market',
     'unit_restrictions_noair',
     'unit_restrictions_noconverters',
     'unit_restrictions_noendgamelrpc',
@@ -117,13 +126,12 @@ numerical_columns = {
     'unit_restrictions_notech3',
     'usemapconfig',
     'usemexconfig',
-    'durationMs',
-    'fullDurationMs',
 }
 string_columns = {
     'assistdronesenabled',
     'commanderbuildersenabled',
     'deathmode',
+    'draft_mode',
     'experimentalshields',
     'experimentalstandardgravity',
     'lootboxes_density',
@@ -171,7 +179,17 @@ def cast_frame(_df):
     _in_str_cols = list(set(_df.columns) & string_columns)
     _in_num_cols = list(set(_df.columns) & numerical_columns)
 
-    other_cols = list(set(_df.columns) - set(_in_str_cols) - set(_in_num_cols))
+    other_cols = list(
+        set(_df.columns)
+        - set(_in_str_cols)
+        - set(_in_num_cols)
+        - {
+            'AllyTeams',
+            'awards',
+            'fetch_success',
+            'id',
+        }
+    )
     logger.info(f'not casted cols: {other_cols}')
 
     _df = _df.cast({col: str for col in _in_str_cols}).with_columns(
@@ -179,6 +197,7 @@ def cast_frame(_df):
     )
 
     num_types = [
+        pl.Boolean,
         pl.UInt8,
         pl.Int8,
         pl.UInt16,

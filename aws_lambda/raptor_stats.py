@@ -155,14 +155,14 @@ def main():
         )
         .filter(
             (
-                (pl.col('raptors') | pl.col('scavengers'))
-                & (pl.col('draw') == False)
-                & (
-                    pl.col('winners')
-                    .list.set_difference(['RaptorsAI', 'ScavengersAI'])
-                    .list.len()
-                    > 0
-                )
+                (pl.col('raptors') | pl.col('scavengers')) & (pl.col('draw') == False)
+                # need losses for winrate-ish stats
+                # & (
+                #     pl.col('winners')
+                #     .list.set_difference(['RaptorsAI', 'ScavengersAI'])
+                #     .list.len()
+                #     > 0
+                # )
             )
         )
     )
@@ -207,8 +207,7 @@ def main():
         .sort(by='startTime', descending=True)
         .select('id')
     )
-    to_fetch_ids = unfetched[: 2 if dev else 30]
-    # to_fetch_ids = unfetched[-3:]
+    to_fetch_ids = unfetched[: 2 if dev else 100]
     if len(to_fetch_ids) == 0:
         newGames = False
         logger.info('no new games to fetch')
@@ -228,7 +227,6 @@ def main():
 
     del to_fetch_ids, unfetched
 
-    # del raptors_detail_api
     if not games.filter(pl.col('fetch_success') == False).is_empty():
         logger.info(
             f'failed to fetch {len(games.filter(pl.col('fetch_success') == False))} games'
