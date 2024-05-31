@@ -311,3 +311,72 @@ gamesettings_scav = {
         if 'Max spawn' in difficulty
     },
 }
+
+higher_harder = {
+    # 'ai_incomemultiplier', # barbarianai?
+    'maxunits',
+    'multiplier_buildtimecost',
+    'multiplier_energycost',
+    # 'multiplier_maxdamage',
+    'multiplier_maxvelocity',
+    'multiplier_metalcost',
+    'raptor_firstwavesboost',
+    'raptor_spawncountmult',
+    # 'raptor_raptorstart', # uncertain
+    'ruins_only_t1',
+    'unit_restrictions_noextractors',
+    'unit_restrictions_notech2',
+    'unit_restrictions_notech3',
+}
+lower_harder = {
+    'assistdronesbuildpowermultiplier',
+    'assistdronescount',
+    'assistdronesenabled',
+    'commanderbuildersbuildpower',
+    'commanderbuildersenabled',
+    'commanderbuildersrange',
+    'disable_fogofwar',
+    'evocom',
+    'evocomleveluprate',
+    'evocomxpmultiplier',
+    'experimentalextraunits',
+    'experimentallegionfaction',
+    'forceallunits',
+    'lootboxes',
+    'lootboxes_density',
+    'multiplier_builddistance',
+    'multiplier_buildpower',
+    'multiplier_energyconversion',
+    'multiplier_energyproduction',
+    'multiplier_losrange',
+    'multiplier_metalextraction',
+    'multiplier_radarrange',
+    'multiplier_resourceincome',
+    'multiplier_shieldpower',
+    'multiplier_turnrate',
+    'multiplier_weapondamage',
+    'multiplier_weaponrange',
+    #
+    'unit_restrictions_nonukes',
+    # 'unit_restrictions_notacnukes',
+    # 'unit_restrictions_noendgamelrpc',
+    # 'unit_restrictions_nolrpc',
+    # 'unit_restrictions_noair',
+    #
+    'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
+    'raptor_spawntimemult',  # (Time Between Waves Multiplier)
+    'raptor_graceperiodmult',
+    'releasecandidates',
+    'scav_bosstimemult',
+    'scav_spawntimemult',
+    'scav_graceperiodmult',
+    'startenergy',
+    'startenergystorage',
+    'startmetal',
+    'startmetalstorage',
+}
+possible_tweak_columns = (
+    ['tweakunits', 'tweakdefs']
+    + [f'tweakunits{i}' for i in range(1, 10)]
+    + [f'tweakdefs{i}' for i in range(1, 10)]
+)

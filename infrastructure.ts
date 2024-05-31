@@ -14,55 +14,71 @@ export class RaptorStatsStack extends cdk.Stack {
       encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
       versioned: false,
     })
-
-    const raptorStats = new lambda.DockerImageFunction(this, 'RaptorStats', {
-      code: lambda.DockerImageCode.fromImageAsset(__dirname),
-      functionName: 'RaptorStats',
-      environment: {
-        BUCKET_NAME: bucket.bucketName,
-      },
-      timeout: cdk.Duration.seconds(100),
-      memorySize: 1024,
-      architecture: cdk.aws_lambda.Architecture.ARM_64,
-    })
-    bucket.grantReadWrite(raptorStats)
-
     const s3AccessPolicy = new cdk.aws_iam.PolicyStatement({
       actions: ['s3:*'],
       resources: [bucket.bucketArn + '/*'],
     })
-
-    raptorStats.addToRolePolicy(s3AccessPolicy)
-
     const gcpSecret = cdk.aws_secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'raptor-gcp',
       'arn:aws:secretsmanager:eu-north-1:190920611368:secret:raptor-gcp-x1EjkW',
     )
-
-    const eventRule = new cdk.aws_events.Rule(this, 'scheduleRule', {
+    const eventRuleRaptorStats = new cdk.aws_events.Rule(this, 'scheduleRule', {
       schedule: cdk.aws_events.Schedule.expression('cron(*/20 * * * ? *)'),
     })
-    eventRule.addTarget(new cdk.aws_events_targets.LambdaFunction(raptorStats))
 
+    const lambdaProps = {
+      code: lambda.DockerImageCode.fromImageAsset(__dirname, {
+        cmd: ['RaptorStats.lambda_handler.handler'],
+      }),
+      functionName: 'RaptorStats',
+      environment: {
+        BUCKET_NAME: bucket.bucketName,
+      },
+      timeout: cdk.Duration.seconds(500),
+      memorySize: 1024,
+      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      retryAttempts: 0,
+      maxEventAge: cdk.Duration.minutes(5),
+    }
+    const raptorStats = new lambda.DockerImageFunction(
+      this,
+      'RaptorStats',
+      lambdaProps,
+    )
+    bucket.grantReadWrite(raptorStats)
+    raptorStats.addToRolePolicy(s3AccessPolicy)
+    eventRuleRaptorStats.addTarget(
+      new cdk.aws_events_targets.LambdaFunction(raptorStats),
+    )
     gcpSecret.grantRead(raptorStats)
 
-    // const alarm = new cloudwatch.Alarm(this, 'CloudWatchAlarm', {
-    //   alarmName: 'OverAgreedLimitWarningAlarm',
-    //   alarmDescription: 'Warning 400 with OverAgreedLimit Warning',
-    //   metric: metricFilter.metric(),
-    //   threshold: 1,
-    //   comparisonOperator:
-    //     cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-    //   evaluationPeriods: 1,
-    //   treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    // })
+    const pveSkill = new lambda.DockerImageFunction(this, 'PveSkill', {
+      ...lambdaProps,
+      ...{
+        code: lambda.DockerImageCode.fromImageAsset(__dirname, {
+          cmd: ['PveSkill.lambda_handler.handler'],
+        }),
+        functionName: 'PveSkill',
+        timeout: cdk.Duration.seconds(220),
+        memorySize: 3008,
+      },
+    })
 
-    // // create our sns topic for our alarm
-    // const topic = new sns.Topic(this, 'AlarmTopic', {
-    //   displayName: 'OverAgreedLimitWarningAlarmTopic',
-    //   topicName: 'OverAgreedLimitWarningAlarmTopic',
-    // })
+    const eventRulePveSkill = new cdk.aws_events.Rule(
+      this,
+      'scheduleRulePveSkill',
+      {
+        schedule: cdk.aws_events.Schedule.expression('cron(5,25,45 * * * ? *)'),
+      },
+    )
+
+    eventRulePveSkill.addTarget(
+      new cdk.aws_events_targets.LambdaFunction(pveSkill),
+    )
+    bucket.grantReadWrite(pveSkill)
+    pveSkill.addToRolePolicy(s3AccessPolicy)
+    gcpSecret.grantRead(pveSkill)
   }
 }
 

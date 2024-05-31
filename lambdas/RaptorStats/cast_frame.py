@@ -185,12 +185,26 @@ def cast_frame(_df):
         - set(_in_num_cols)
         - {
             'AllyTeams',
+            'AllyTeamsList',
             'awards',
+            'draw',
             'fetch_success',
             'id',
+            'is_player_ai_mixed',
+            'Map',
+            'player_win',
+            'players',
+            'raptor_win',
+            'raptors_win',
+            'raptors',
+            'scavengers_win',
+            'scavengers',
+            'startTime',
+            'winners',
         }
     )
-    logger.info(f'not casted cols: {other_cols}')
+    if len(other_cols) > 0:
+        logger.warning(f'not casted cols: {other_cols}')
 
     _df = _df.cast({col: str for col in _in_str_cols}).with_columns(
         pl.col(_in_str_cols).fill_null('')
@@ -213,7 +227,7 @@ def cast_frame(_df):
     for col in _in_num_cols:
         for _type in num_types:
             try:
-                _df = _df.cast({col: _type})
+                _df = _df.cast({col: _type}, strict=True)
                 break
             except Exception as e:
                 logger.debug(e)

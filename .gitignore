@@ -10,3 +10,7 @@ node_modules
 .cdk.staging
 cdk.out
 *.parquet
+*.csv
+*.xlsx
+*Zone.Identifier
+*.backup.*

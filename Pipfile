@@ -8,9 +8,12 @@ requests = "*"
 gspread = "*"
 boto3 = "*"
 pytz = "*"
-polars = "*"
+polars = "==0.20.29"
 bpython = "*"
 s3fs = "*"
+xlsxwriter = "*"
+scikit-learn = "*"
+numpy = "*"
 
 [dev-packages]
 guppy3 = "*"

@@ -4,14 +4,27 @@ import logging
 import os
 import time
 
-import boto3
 import gspread
 import polars as pl
 import polars.selectors as cs
 import pytz
 import requests
 import s3fs
-from cast_frame import cast_frame
+
+from Common.common import get_df, get_secret
+
+try:
+    from cast_frame import cast_frame
+except ModuleNotFoundError:
+    from RaptorStats.cast_frame import cast_frame
+try:
+    from gamesettings import possible_tweak_columns, lower_harder, higher_harder
+except ModuleNotFoundError:
+    from RaptorStats.gamesettings import (
+        possible_tweak_columns,
+        lower_harder,
+        higher_harder,
+    )
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -26,23 +39,24 @@ replay_details_file_name = 'replays_gamesettings.parquet'
 bucket_path = 's3://raptor-stats-parquet/'
 
 
-def get_df_s3(path):
-    s3_path = bucket_path + path
-    logger.info(f'fetching from s3 "{path}"')
-    _df = pl.read_parquet(s3_path)
-    if dev:
-        logger.info(f'writing {len(_df)} to {path}')
-        _df.to_parquet(path)
-    return _df
+def _winners(row):
+    _winners = []
+    for team in row:
+        if team['winningTeam'] is True:
+            if len(team['Players']) > 0:
+                _winners.extend([player['name'] for player in team['Players']])
+            if len(team['AIs']) > 0:
+                _winners.extend([ai['shortName'] for ai in team['AIs']])
+    return _winners
 
 
-def get_df(path):
-    if dev and not os.path.exists(path):
-        return get_df_s3(path)
-    path = ('' if dev else bucket_path) + path
-    df = pl.read_parquet(path)
-    logger.info(f'fetched {len(df)} from "{path}"')
-    return df
+def is_player_ai_mixed(allyTeams):
+    if len(allyTeams) >= 3:
+        return True
+    for team in allyTeams:
+        if (len(team['Players']) > 0 and len(team['AIs']) > 0) or len(team['AIs']) > 1:
+            return True
+    return False
 
 
 def store_df(df, path):
@@ -65,7 +79,7 @@ def main():
     while n_received_rows > 1 and limit > 0 and page <= (1 if dev else 100):
         apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
         if page > 1:
-            time.sleep(1.2)
+            time.sleep(0.2)
         logger.info(f'fetching {apiUrl}')
         replays_json = requests.get(apiUrl, headers={'User-Agent': 'tetrisface'}).json()
 
@@ -97,14 +111,14 @@ def main():
     if n_total_received_rows > 0:
         store_df(games, replays_file_name)
 
-    def is_raptors(row):
+    def has_raptors(row):
         for team in row:
             for ai in team['AIs']:
                 if ai['shortName'] == 'RaptorsAI':
                     return True
         return False
 
-    def is_scavengers(row):
+    def has_scavengers(row):
         for team in row:
             for ai in team['AIs']:
                 if ai['shortName'] == 'ScavengersAI':
@@ -117,16 +131,6 @@ def main():
             for is_win in [team['winningTeam'] for team in row]
         )
 
-    def _winners(row):
-        _winners = []
-        for team in row:
-            if team['winningTeam'] is True:
-                if len(team['Players']) > 0:
-                    _winners.extend([player['name'] for player in team['Players']])
-                if len(team['AIs']) > 0:
-                    _winners.extend([ai['shortName'] for ai in team['AIs']])
-        return _winners
-
     def players(row):
         _players = []
         for team in row:
@@ -136,10 +140,13 @@ def main():
     games = (
         games.with_columns(
             raptors=pl.col('AllyTeams').map_elements(
-                is_raptors, return_dtype=pl.Boolean
+                has_raptors, return_dtype=pl.Boolean
             ),
             scavengers=pl.col('AllyTeams').map_elements(
-                is_scavengers, return_dtype=pl.Boolean
+                has_scavengers, return_dtype=pl.Boolean
+            ),
+            is_player_ai_mixed=pl.col('AllyTeams').map_elements(
+                is_player_ai_mixed, return_dtype=pl.Boolean
             ),
             draw=pl.col('AllyTeams').map_elements(is_draw, return_dtype=pl.Boolean),
             winners=pl.col('AllyTeams').map_elements(
@@ -176,17 +183,23 @@ def main():
     )
     del replay_details_cache
 
-    previousPlayerWinStartTime = games.select(pl.col('startTime')).max().item()
+    previousPlayerWinStartTime = (
+        games.filter(
+            pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+        )
+        .select(pl.col('startTime'))
+        .max()
+        .item()
+    )
     logger.info(f'previousPlayerWinStartTime: {previousPlayerWinStartTime}')
 
     def api_replay_detail(_replay_id):
         replay_details = {}
         url = ''
         if not dev:
-            time.sleep(1.2)
+            time.sleep(0.2)
         if _replay_id is not None:
             url = f'https://api.bar-rts.com/replays/{_replay_id}'
-            logger.info(f'fetching {url}')
             response = requests.get(url, headers={'User-Agent': 'tetrisface'})
             if response.status_code == 200:
                 response_json = response.json()
@@ -207,23 +220,26 @@ def main():
         .sort(by='startTime', descending=True)
         .select('id')
     )
-    to_fetch_ids = unfetched[: 2 if dev else 100]
+    to_fetch_ids = unfetched[: 2 if dev else 400]
     if len(to_fetch_ids) == 0:
-        newGames = False
         logger.info('no new games to fetch')
         if not dev:
             return
     else:
-        newGames = True
         logger.info(f'fetching {len(to_fetch_ids)} of {len(unfetched)} missing games')
 
         fetched = []
-        for replay_id in to_fetch_ids.iter_rows():
+        for index, replay_id in enumerate(to_fetch_ids.iter_rows()):
+            logger.info(f'fetching {index+1}/{len(to_fetch_ids)} {replay_id[0]}')
             fetched.append(api_replay_detail(replay_id[0]))
 
-        games = games.update(
-            cast_frame(pl.DataFrame(fetched, strict=False)), how='left', on='id'
-        )
+        games = games.select(
+            games.columns
+            + [
+                pl.lit(None).alias(x)
+                for x in set(fetched[0].keys()) - set(games.columns)
+            ]
+        ).update(cast_frame(pl.DataFrame(fetched, strict=False)), how='left', on='id')
 
     del to_fetch_ids, unfetched
 
@@ -232,11 +248,22 @@ def main():
             f'failed to fetch {len(games.filter(pl.col('fetch_success') == False))} games'
         )
 
-    # refetch all game details
-    # raptor_games["fetch_success"] = False
+    # refetch all evocom game details
+    # games = games.update(
+    #     games.filter(
+    #         (pl.col('startTime').cast(pl.Date) > datetime.date(2024, 4, 26))
+    #         & pl.col('evocom').is_null()
+    #     ).select('id', pl.lit(None).alias('fetch_success')),
+    #     on='id',
+    #     include_nulls=True,
+    # )
 
     # store
     store_df(games, replay_details_file_name)
+
+    games = games.filter(
+        pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+    )
 
     # stop without any new wins
     newMaxStartTime, newMaxEndTime = games.select(
@@ -250,14 +277,16 @@ def main():
         tz_stockholm
     )
 
+    # FIXME
     if (
         previousPlayerWinStartTime
         and newMaxStartTime.item() <= previousPlayerWinStartTime
-        and not newGames
     ):
-        logger.info(f'no new wins since {previousStockholm}')
-        if not dev:
-            return
+        logger.info(
+            f'no new wins since {previousStockholm} ({newMaxStartTime.item()} <= {previousPlayerWinStartTime})'
+        )
+        # if not dev:
+        #     return
     else:
         logger.info(
             f'new wins since {previousStockholm}: {newMaxStartTime.item().replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
@@ -271,38 +300,10 @@ def main():
         various,
     )
 
-    possible_tweak_columns = (
-        ['tweakunits', 'tweakdefs']
-        + [f'tweakunits{i}' for i in range(1, 10)]
-        + [f'tweakdefs{i}' for i in range(1, 10)]
-    )
     all_nuttyb_tweaks = (
         main + [string for x in hp_multiplier.values() for string in x] + various
     )
     any_nuttyb_tweaks_or_empty = all_nuttyb_tweaks + ['']
-
-    higher_harder = {
-        'unit_restrictions_noextractors',
-        'raptor_spawncountmult',
-        'raptor_firstwavesboost',
-        'maxunits',
-        # 'raptor_raptorstart', # uncertain
-    }
-    lower_harder = {
-        'startmetal',
-        'startenergy',
-        'startmetalstorage',
-        'startenergystorage',
-        'multiplier_builddistance',
-        'multiplier_shieldpower',
-        'multiplier_buildpower',
-        'commanderbuildersrange',
-        'commanderbuildersbuildpower',
-        'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
-        'raptor_spawntimemult',  # (Time Between Waves Multiplier)
-        'scav_bosstimemult',
-        'scav_spawntimemult',
-    }
 
     def gamesettings_mode(row):
         if row['raptors']:
@@ -392,7 +393,12 @@ def main():
             row['nuttyb_tweaks_exclusive']
             and row['Gamesettings Mode'] in nuttyb_exclusive_modes
         ):
-            return f"NuttyB Default {row['nuttyb_hp']}"
+            if row['nuttyb_hp']:
+                return f"NuttyB Default {row['nuttyb_hp']}"
+            elif row['raptors']:
+                return f'NuttyB Default Regular HP ({format_regular_diff(row['raptor_difficulty'])})'
+            elif row['scavengers']:
+                return f'NuttyB Default Regular HP ({format_regular_diff(row['scav_difficulty'])})'
         elif row['nuttyb_main']:
             if row['nuttyb_hp']:
                 return f"NuttyB Main & HP {row['nuttyb_hp']}"
@@ -523,6 +529,12 @@ def main():
             'NuttyB Default Epic++',
             'NuttyB Default Epic+',
             'NuttyB Default Epic',
+            'NuttyB Default Regular HP (Epic)',
+            'NuttyB Default Regular HP (Very Hard)',
+            'NuttyB Default Regular HP (Hard)',
+            'NuttyB Default Regular HP (Normal)',
+            'NuttyB Default Regular HP (Easy)',
+            'NuttyB Default Regular HP (Very Easy)',
             'NuttyB Main & HP Epicest',
             'NuttyB Main & HP Epicer+',
             'NuttyB Main & HP Epic++',
@@ -658,22 +670,6 @@ def main():
     )
 
     return 'done'
-
-
-def get_secret():
-    secret_name = 'raptor-gcp'
-    region_name = 'eu-north-1'
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(service_name='secretsmanager', region_name=region_name)
-
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-    except Exception as e:
-        raise e
-
-    return get_secret_value_response['SecretString']
 
 
 def links_cell(url_pairs):
