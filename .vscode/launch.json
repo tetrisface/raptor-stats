@@ -5,21 +5,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug pve_skill",
+      "name": "pve_skill",
       "type": "debugpy",
       "request": "launch",
       "module": "PveSkill.pve_skill",
+      "cwd": "${workspaceFolder}/lambdas",
       "console": "integratedTerminal",
       "env": {
         "ENV": "dev"
-      },
-      "cwd": "${workspaceFolder}/lambdas"
+      }
     },
     {
-      "name": "Debug raptor-stats",
+      "name": "raptor_stats",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/aws_lambda/index.py",
+      "module": "RaptorStats.raptor_stats",
+      "cwd": "${workspaceFolder}/lambdas",
       "console": "integratedTerminal",
       "env": {
         "ENV": "dev"

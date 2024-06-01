@@ -36,11 +36,13 @@ def main():
         winners_extended=pl.col('winners').list.set_difference(['RaptorsAI']),
         players_extended=pl.col('players').list.set_difference(['RaptorsAI']),
     )
-    logger.info(f'{len(raptors_games)} total replays')
 
     raptors_games = raptors_games.filter(
         pl.col('raptors').eq(True) & ~pl.col('is_player_ai_mixed')
     )
+
+    logger.info(f'{len(raptors_games)} total replays')
+
     # scavengers_games = df.filter(
     #     pl.col('scavengers').eq(True) & ~pl.col('is_player_ai_mixed')
     # )
@@ -58,9 +60,9 @@ def main():
     )
 
     # coalesce players from harder into easier games
-    for game in raptors_games.filter(
-        pl.col('raptors_win').eq(False) & pl.col('draw').eq(False)
-    ).iter_rows(named=True):
+    for game in raptors_games.filter(pl.col('raptors_win').eq(False)).iter_rows(
+        named=True
+    ):
         easier_games = raptors_games.filter(
             [~pl.col('id').eq(game['id'])]
             + [pl.col(x).eq_missing(game[x]) for x in gamesetting_equal_columns]
@@ -68,31 +70,24 @@ def main():
             + [pl.col(x).ge(game[x]) for x in lower_harder]
         )
 
-        if len(easier_games) > 0:
-            try:
-                raptors_games = raptors_games.update(
-                    easier_games.with_columns(
-                        pl.col('Merged Win Replays')
-                        .list.concat(pl.lit([game['id']]))
-                        .alias('Merged Win Replays'),
-                        winners_extended=pl.col('winners').list.concat(
-                            pl.lit(game['winners'])
-                        ),
-                        players_extended=pl.col('players').list.concat(
-                            pl.lit(game['players'])
-                        ),
-                    ).select(
-                        'id',
-                        'winners_extended',
-                        'players_extended',
-                        'Merged Win Replays',
-                    ),
-                    on='id',
-                )
+        if len(easier_games) == 0:
+            continue
 
-            except Exception as e:
-                logger.exception(e)
-                s()
+        raptors_games = raptors_games.update(
+            easier_games.with_columns(
+                pl.col('Merged Win Replays')
+                .list.concat(pl.lit([game['id']]))
+                .alias('Merged Win Replays'),
+                winners_extended=pl.col('winners').list.concat(pl.lit(game['winners'])),
+                players_extended=pl.col('players').list.concat(pl.lit(game['players'])),
+            ).select(
+                'id',
+                'winners_extended',
+                'players_extended',
+                'Merged Win Replays',
+            ),
+            on='id',
+        )
 
     raptors_games = raptors_games.explode('players').rename({'players': 'player'})
     group_df = (
@@ -148,7 +143,7 @@ def main():
     pastes = []
     for row in group_df.iter_rows(named=True):
         pastes.append(
-            '\n'
+            '\n!preset coop\n'
             + '\n'.join(
                 [
                     f'!{key} {re.sub("\\.0\\s*$", "", str(value))}'
@@ -192,7 +187,7 @@ def main():
         )
     )
 
-    min_max_scaler = MinMaxScaler(feature_range=(0, 99))
+    min_max_scaler = MinMaxScaler(feature_range=(0, 50))
     min_max_scaler.set_output(transform='polars')
 
     pve_skill_players = pve_skill_players.with_columns(
@@ -212,38 +207,29 @@ def update_sheets(df, skill_number_df):
     if len(df) == 0:
         return
 
-    data_values = df.rows()
-    values = [df.columns] + data_values
-
     if dev:
         gc = gspread.service_account()
+        spreadsheet = gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
     else:
         gc = gspread.service_account_from_dict(json.loads(get_secret()))
+        spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
 
-    spreadsheet = (
-        gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
-        if dev
-        else gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
-    )
     worksheet_gamesettings = spreadsheet.worksheet('gamesettings grouped')
     worksheet_gamesettings.clear()
     worksheet_gamesettings.update(
-        values=values,
+        values=[df.columns] + df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
 
-    del values, data_values, df
+    del df
 
     if len(skill_number_df) == 0:
         return
 
-    data_values = skill_number_df.rows()
-    values = [skill_number_df.columns] + data_values
-
     worksheet_skill_number = spreadsheet.worksheet('skill number')
     worksheet_skill_number.clear()
     worksheet_skill_number.update(
-        values=values,
+        values=[skill_number_df.columns] + skill_number_df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
 

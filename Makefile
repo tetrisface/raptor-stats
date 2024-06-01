@@ -41,12 +41,12 @@ tail-skill:
 	aws logs tail /aws/lambda/PveSkill --follow
 
 upload:
-	aws s3 cp replays.parquet s3://raptor-stats-parquet/replays.parquet
-	aws s3 cp replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet
+	aws s3 cp lambdas/replays.parquet s3://raptor-stats-parquet/replays.parquet
+	aws s3 cp lambdas/replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet
 
 download:
-	aws s3 cp s3://raptor-stats-parquet/replays.parquet .
-	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet .
+	aws s3 cp s3://raptor-stats-parquet/replays.parquet lambdas/
+	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet lambdas/
 
 backup:
 	aws s3 cp s3://raptor-stats-parquet/replays.parquet s3://raptor-stats-parquet/replays.parquet.backup.`date +%d`

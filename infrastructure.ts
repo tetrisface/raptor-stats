@@ -76,7 +76,7 @@ export class RaptorStatsStack extends cdk.Stack {
     eventRulePveSkill.addTarget(
       new cdk.aws_events_targets.LambdaFunction(pveSkill),
     )
-    bucket.grantReadWrite(pveSkill)
+    bucket.grantRead(pveSkill)
     pveSkill.addToRolePolicy(s3AccessPolicy)
     gcpSecret.grantRead(pveSkill)
   }

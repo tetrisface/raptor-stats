@@ -13,18 +13,17 @@ import s3fs
 
 from Common.common import get_df, get_secret
 
-try:
-    from cast_frame import cast_frame
-except ModuleNotFoundError:
-    from RaptorStats.cast_frame import cast_frame
-try:
-    from gamesettings import possible_tweak_columns, lower_harder, higher_harder
-except ModuleNotFoundError:
-    from RaptorStats.gamesettings import (
-        possible_tweak_columns,
-        lower_harder,
-        higher_harder,
-    )
+from RaptorStats.cast_frame import cast_frame
+from RaptorStats.gamesettings import (
+    gamesettings_scav,
+    gamesettings,
+    higher_harder,
+    hp_multiplier,
+    lower_harder,
+    nutty_b_main,
+    possible_tweak_columns,
+    various,
+)
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -206,6 +205,7 @@ def main():
                 replay_details = response_json.get('gameSettings')
                 replay_details['awards'] = response_json.get('awards')
                 replay_details['AllyTeams'] = response_json.get('AllyTeams')
+                replay_details['Map'] = response_json.get('Map')
                 replay_details['id'] = _replay_id
                 replay_details['fetch_success'] = True
                 return replay_details
@@ -248,11 +248,12 @@ def main():
             f'failed to fetch {len(games.filter(pl.col('fetch_success') == False))} games'
         )
 
-    # refetch all evocom game details
+    # refetch game details
     # games = games.update(
     #     games.filter(
-    #         (pl.col('startTime').cast(pl.Date) > datetime.date(2024, 4, 26))
-    #         & pl.col('evocom').is_null()
+    #         # (pl.col('startTime').cast(pl.Date) > datetime.date(2024, 4, 26))
+    #         # & pl.col('evocom').is_null()
+    #         # pl.col('Map').struct.field('scriptName').is_null()
     #     ).select('id', pl.lit(None).alias('fetch_success')),
     #     on='id',
     #     include_nulls=True,
@@ -277,7 +278,7 @@ def main():
         tz_stockholm
     )
 
-    # FIXME
+    # FIXME previousPlayerWinStartTime
     if (
         previousPlayerWinStartTime
         and newMaxStartTime.item() <= previousPlayerWinStartTime
@@ -292,16 +293,10 @@ def main():
             f'new wins since {previousStockholm}: {newMaxStartTime.item().replace(tzinfo=pytz.utc).astimezone(tz_stockholm)}'
         )
 
-    from gamesettings import (
-        gamesettings,
-        gamesettings_scav,
-        hp_multiplier,
-        main,
-        various,
-    )
-
     all_nuttyb_tweaks = (
-        main + [string for x in hp_multiplier.values() for string in x] + various
+        nutty_b_main
+        + [string for x in hp_multiplier.values() for string in x]
+        + various
     )
     any_nuttyb_tweaks_or_empty = all_nuttyb_tweaks + ['']
 
@@ -442,7 +437,7 @@ def main():
 
     games = games.with_columns(
         nuttyb_main=pl.concat_list(possible_tweak_columns)
-        .list.set_intersection(main)
+        .list.set_intersection(nutty_b_main)
         .list.len()
         > 0,
         nuttyb_hp=pl.when(
@@ -934,3 +929,7 @@ def update_sheet(spreadsheet, groups, sheet_name_postfix, last_win):
         )
     }
     spreadsheet.batch_update(body)
+
+
+if __name__ == '__main__':
+    main()

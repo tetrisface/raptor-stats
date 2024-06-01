@@ -403,7 +403,7 @@ def main():
 
     from gamesettings import (
         hp_multiplier,
-        main,
+        nutty_b_main,
         coms,
         meganuke_149,
         wind_restrict_149,
@@ -415,14 +415,14 @@ def main():
         lambda row: all(
             [
                 tweak['value'] == row[tweak['location']]
-                for tweak in main
+                for tweak in nutty_b_main
                 if tweak['version'] == '1.48'
             ]
         )
         or all(
             [
                 tweak['value'] == row[tweak['location']]
-                for tweak in main
+                for tweak in nutty_b_main
                 if tweak['version'] == '1.49'
             ]
         ),
@@ -450,7 +450,7 @@ def main():
     for setting_dict in [
         setting_dict
         for setting_dict in [
-            *main,
+            *nutty_b_main,
             *hp_multiplier,
             *coms,
             meganuke_149,
