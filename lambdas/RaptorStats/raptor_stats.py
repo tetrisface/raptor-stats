@@ -13,12 +13,12 @@ import s3fs
 
 from Common.common import get_df, get_secret
 
-from RaptorStats.cast_frame import cast_frame
-from RaptorStats.gamesettings import (
+from Common.cast_frame import cast_frame
+from Common.gamesettings import (
     gamesettings_scav,
     gamesettings,
     higher_harder,
-    hp_multiplier,
+    nuttyb_hp_multiplier,
     lower_harder,
     nutty_b_main,
     possible_tweak_columns,
@@ -78,7 +78,7 @@ def main():
     while n_received_rows > 1 and limit > 0 and page <= (1 if dev else 100):
         apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
         if page > 1:
-            time.sleep(0.2)
+            time.sleep(0.4)
         logger.info(f'fetching {apiUrl}')
         replays_json = requests.get(apiUrl, headers={'User-Agent': 'tetrisface'}).json()
 
@@ -196,7 +196,7 @@ def main():
         replay_details = {}
         url = ''
         if not dev:
-            time.sleep(0.2)
+            time.sleep(0.4)
         if _replay_id is not None:
             url = f'https://api.bar-rts.com/replays/{_replay_id}'
             response = requests.get(url, headers={'User-Agent': 'tetrisface'})
@@ -295,7 +295,7 @@ def main():
 
     all_nuttyb_tweaks = (
         nutty_b_main
-        + [string for x in hp_multiplier.values() for string in x]
+        + [string for x in nuttyb_hp_multiplier.values() for string in x]
         + various
     )
     any_nuttyb_tweaks_or_empty = all_nuttyb_tweaks + ['']
@@ -313,9 +313,9 @@ def main():
             for setting, value in settings.items():
                 if row[setting] is not None and (
                     row[setting] == value
-                    or (setting in higher_harder and row[setting] >= value)
+                    or (setting in higher_harder and row[setting] > value)
+                    or (setting in lower_harder and row[setting] < value)
                     or (setting == ai_start_setting_name and row[setting] == 'avoid')
-                    or (setting in lower_harder and row[setting] <= value)
                 ):
                     # logger.info(f'value matching mode {mode_name} {setting} {row[setting]} ~= {value} higher harder {setting in higher_harder} lower harder {setting in lower_harder}')
                     match = True
@@ -442,35 +442,35 @@ def main():
         > 0,
         nuttyb_hp=pl.when(
             pl.concat_list(possible_tweak_columns)
-            .list.set_intersection(hp_multiplier['Epicest'])
+            .list.set_intersection(nuttyb_hp_multiplier['Epicest'])
             .list.len()
             > 0
         )
         .then(pl.lit('Epicest'))
         .when(
             pl.concat_list(possible_tweak_columns)
-            .list.set_intersection(hp_multiplier['Epicer+'])
+            .list.set_intersection(nuttyb_hp_multiplier['Epicer+'])
             .list.len()
             > 0
         )
         .then(pl.lit('Epicer+'))
         .when(
             pl.concat_list(possible_tweak_columns)
-            .list.set_intersection(hp_multiplier['Epic++'])
+            .list.set_intersection(nuttyb_hp_multiplier['Epic++'])
             .list.len()
             > 0
         )
         .then(pl.lit('Epic++'))
         .when(
             pl.concat_list(possible_tweak_columns)
-            .list.set_intersection(hp_multiplier['Epic+'])
+            .list.set_intersection(nuttyb_hp_multiplier['Epic+'])
             .list.len()
             > 0
         )
         .then(pl.lit('Epic+'))
         .when(
             pl.concat_list(possible_tweak_columns)
-            .list.set_intersection(hp_multiplier['Epic'])
+            .list.set_intersection(nuttyb_hp_multiplier['Epic'])
             .list.len()
             > 0
         )
@@ -629,14 +629,10 @@ def main():
 
     if dev:
         gc = gspread.service_account()
+        spreadsheet = gc.open_by_key('1w8Ng9GGUo6DU0rBFRYRnC_JxK8nHTSSjf1Nbq1e-3bc')
     else:
         gc = gspread.service_account_from_dict(json.loads(get_secret()))
-
-    spreadsheet = (
-        gc.open_by_key('1w8Ng9GGUo6DU0rBFRYRnC_JxK8nHTSSjf1Nbq1e-3bc')
-        if dev
-        else gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
-    )
+        spreadsheet = gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
 
     update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
     players = players.filter(pl.col('Difficulty') != 'Mixed AIs')
@@ -685,7 +681,7 @@ def grouped(to_group_df):
     logger.info(f'grouping {len(to_group_df)} rows')
 
     for index, ((group_diff, group_mode), group_df) in enumerate(
-        to_group_df.groupby(
+        to_group_df.group_by(
             ['Difficulty', 'Gamesettings Mode'],
             maintain_order=True,
         )
@@ -695,7 +691,7 @@ def grouped(to_group_df):
         )
 
         group_players = (
-            group_df.groupby(['Player'])
+            group_df.group_by(['Player'])
             .agg(
                 pl.col('Player').count().alias('n_victories'),
                 (pl.sum('🏆DMG') + pl.sum('🏆ECO')).alias('awards_sum'),
@@ -748,7 +744,7 @@ def grouped(to_group_df):
                 group_name,
                 group_players
                 if index == 0
-                else group_players.select(pl.all().map_alias(lambda x: f'{x}_{index}')),
+                else group_players.select(pl.all().name.map(lambda x: f'{x}_{index}')),
             ]
         )
 

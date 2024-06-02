@@ -3,7 +3,6 @@ import os
 import boto3
 import polars as pl
 
-
 dev = os.environ.get('ENV', 'prod') == 'dev'
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)

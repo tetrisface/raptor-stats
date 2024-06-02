@@ -6,7 +6,6 @@ RUN pip install gspread
 RUN pip install s3fs
 RUN pip install pytz
 RUN pip install polars==0.20.29
-RUN pip install scikit-learn
-
+RUN pip install numpy
 
 COPY lambdas ${LAMBDA_TASK_ROOT}

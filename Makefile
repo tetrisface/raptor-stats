@@ -23,10 +23,9 @@ run:
 	aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
 
 run-dev:
-	PIPENV_VERBOSITY=-1 ENV=dev pipenv run python aws_lambda/index.py
+	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m PveSkill.pve_skill)
 
 install:
-	make backup
 	cdk deploy
 
 deploy: install
