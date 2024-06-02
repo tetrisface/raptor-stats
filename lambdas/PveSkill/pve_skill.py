@@ -34,30 +34,30 @@ logger = logging.getLogger()
 
 
 def main():
-    raptors_games = (
-        cast_frame(get_df(replay_details_file_name))
-        .filter(
-            pl.col('raptors').eq(True)
-            & ~pl.col('is_player_ai_mixed')
-            & pl.col('has_player_handicap').eq(False)
-        )
-        .with_columns(
-            pl.col('Map').struct.field('scriptName').alias('Map Name'),
-            pl.lit([]).alias('Merged Win Replays'),
-            winners=pl.col('winners').list.set_difference(['RaptorsAI']),
-            players=pl.col('players').list.set_difference(['RaptorsAI']),
-        )
-        .with_columns(
-            winners_extended=pl.col('winners'),
-            players_extended=pl.col('players'),
-        )
+    _games = cast_frame(get_df(replay_details_file_name)).filter(
+        ~pl.col('is_player_ai_mixed') & pl.col('has_player_handicap').eq(False)
     )
 
-    logger.info(f'total replays {len(raptors_games)}')
+    process_games(_games.filter(pl.col('raptors').eq(True)), 'Raptors')
+    process_games(_games.filter(pl.col('scavengers').eq(True)), 'Scavengers')
 
-    # scavengers_games = df.filter(
-    #     pl.col('scavengers').eq(True) & ~pl.col('is_player_ai_mixed')
-    # )
+
+def process_games(games, prefix):
+    games = games.with_columns(
+        pl.col('Map').struct.field('scriptName').alias('Map Name'),
+        pl.lit([]).alias('Merged Win Replays'),
+        winners=pl.col('winners').list.set_difference(['RaptorsAI'])
+        if prefix == 'Raptors'
+        else pl.col('winners').list.set_difference(['ScavengersAI']),
+        players=pl.col('players').list.set_difference(['RaptorsAI'])
+        if prefix == 'Raptors'
+        else pl.col('players').list.set_difference(['ScavengersAI']),
+    ).with_columns(
+        winners_extended=pl.col('winners'),
+        players_extended=pl.col('players'),
+    )
+
+    logger.info(f'total replays {len(games)}')
 
     gamesetting_equal_columns = set(possible_tweak_columns)
     for gamesetting in gamesettings.values():
@@ -72,10 +72,10 @@ def main():
     )
 
     # merge/coalesce players from harder into easier games
-    for game in raptors_games.filter(pl.col('raptors_win').eq(False)).iter_rows(
-        named=True
-    ):
-        easier_games = raptors_games.filter(
+    for game in games.filter(
+        pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+    ).iter_rows(named=True):
+        easier_games = games.filter(
             [~pl.col('id').eq(game['id'])]
             + [
                 pl.col(x).eq_missing(game[x])
@@ -88,7 +88,7 @@ def main():
         if len(easier_games) == 0:
             continue
 
-        raptors_games = raptors_games.update(
+        games = games.update(
             easier_games.with_columns(
                 pl.col('Merged Win Replays')
                 .list.concat(pl.lit([game['id']]))
@@ -163,7 +163,7 @@ def main():
 
     group_by_columns = ['Map Name'] + list(gamesetting_all_columns)
     group_df = (
-        raptors_games.filter(pl.col('players_extended').len() > 0)
+        games.filter(pl.col('players_extended').len() > 0)
         .group_by(group_by_columns)
         .agg(
             (
@@ -192,7 +192,9 @@ def main():
             .drop_nulls()
             .n_unique()
             .alias('#Players'),
-            pl.when(pl.col('raptors_win').eq(False))
+            pl.when(
+                pl.col('raptors_win').eq(False) | pl.col('scavengers_win').eq(False)
+            )
             .then(pl.col('id'))
             .drop_nulls()
             .unique()
@@ -202,7 +204,7 @@ def main():
             .drop_nulls()
             .unique()
             .alias('Merged Win Replays'),
-            pl.when(pl.col('raptors_win').eq(True))
+            pl.when(pl.col('raptors_win').eq(True) | pl.col('scavengers_win').eq(True))
             .then(pl.col('id'))
             .drop_nulls()
             .unique()
@@ -250,14 +252,32 @@ def main():
     group_export_df = (
         group_df.with_columns(
             pl.col('winners')
-            .map_elements(lambda col: ', '.join(col.to_list()))
+            .map_elements(
+                lambda col: ', '.join(col.to_list()),
+                skip_nulls=True,
+                return_dtype=pl.String,
+            )
             .alias('Winners'),
-            pl.col('Players').map_elements(lambda col: ', '.join(col.to_list())),
-            pl.col('Win Replays').map_elements(lambda col: ', '.join(col.to_list())),
-            pl.col('Merged Win Replays').map_elements(
-                lambda col: ', '.join(col.to_list())
+            pl.col('Players').map_elements(
+                lambda col: ', '.join(col.to_list()),
+                skip_nulls=True,
+                return_dtype=pl.String,
             ),
-            pl.col('Loss Replays').map_elements(lambda col: ', '.join(col.to_list())),
+            pl.col('Win Replays').map_elements(
+                lambda col: ', '.join(col.to_list()),
+                skip_nulls=True,
+                return_dtype=pl.String,
+            ),
+            pl.col('Merged Win Replays').map_elements(
+                lambda col: ', '.join(col.to_list()),
+                skip_nulls=True,
+                return_dtype=pl.String,
+            ),
+            pl.col('Loss Replays').map_elements(
+                lambda col: ', '.join(col.to_list()),
+                skip_nulls=True,
+                return_dtype=pl.String,
+            ),
             pl.Series(pastes).alias('Copy Paste'),
         )
         .select(
@@ -347,10 +367,10 @@ def main():
 
     logger.info('updating sheets')
 
-    update_sheets(group_export_df, pve_skill_players)
+    update_sheets(group_export_df, pve_skill_players, prefix=prefix)
 
 
-def update_sheets(df, skill_number_df):
+def update_sheets(df, skill_number_df, prefix):
     if dev:
         gc = gspread.service_account()
         spreadsheet = gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
@@ -358,7 +378,7 @@ def update_sheets(df, skill_number_df):
         gc = gspread.service_account_from_dict(json.loads(get_secret()))
         spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
 
-    worksheet_gamesettings = spreadsheet.worksheet('Gamesettings')
+    worksheet_gamesettings = spreadsheet.worksheet(prefix + ' Gamesettings')
     worksheet_gamesettings.clear()
     worksheet_gamesettings.update(
         values=[df.columns] + df.rows(),
@@ -367,7 +387,7 @@ def update_sheets(df, skill_number_df):
 
     del df
 
-    worksheet_skill_number = spreadsheet.worksheet('PVE Skill')
+    worksheet_skill_number = spreadsheet.worksheet(prefix + ' PVE Skill')
     worksheet_skill_number.clear()
     worksheet_skill_number.update(
         values=[skill_number_df.columns] + skill_number_df.rows(),
