@@ -141,14 +141,10 @@ def main():
                     if len(new_teammates) == 0 and len(teammates) != 1:
                         continue
                     x = len(new_teammates) + 1
-                    old = gamesetting_result_row_item[result_winner]['success_rate']
                     gamesetting_result_row_item[result_winner]['success_rate'] = max(
                         success_rate,
                         gamesetting_result_row_item[result_winner]['success_rate']
                         - success_rate / min(1, -0.0603 * (x**2) + 2.6371 * x - 1.7648),
-                    )
-                    logger.info(
-                        f'from {old} -> {gamesetting_result_row_item[result_winner]["success_rate"]} towards {success_rate}'
                     )
                     gamesetting_result_row_item[result_winner]['teammates'] |= (
                         new_teammates
