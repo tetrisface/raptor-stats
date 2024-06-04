@@ -384,7 +384,8 @@ lower_harder = {
     'startmetalstorage',
 }
 possible_tweak_columns = (
-    ['tweakunits', 'tweakdefs']
+    ['tweakunits']
     + [f'tweakunits{i}' for i in range(1, 10)]
+    + ['tweakdefs']
     + [f'tweakdefs{i}' for i in range(1, 10)]
 )

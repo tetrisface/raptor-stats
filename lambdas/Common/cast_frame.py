@@ -2,7 +2,7 @@ import logging
 import os
 
 import polars as pl
-from Common.gamesettings import nuttyb_hp_multiplier
+from Common.gamesettings import nuttyb_hp_multiplier, possible_tweak_columns
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -197,6 +197,29 @@ def has_player_handicap(allyTeams):
     return False
 
 
+def has_barbarian(allyTeams):
+    for team in allyTeams:
+        for ai in team['AIs']:
+            if ai['shortName'] == 'BarbarianAI':
+                s()
+                return True
+    return False
+
+
+def reorder_column(df, new_position, col_name):
+    neworder = df.columns
+    neworder.remove(col_name)
+    neworder.insert(new_position, col_name)
+    return df.select(neworder)
+
+
+def reorder_tweaks(df):
+    start_index = df.columns.index('tweakunits')
+    for sub_index, tweak_column in enumerate(possible_tweak_columns[1:]):
+        df = reorder_column(df, start_index + sub_index + 1, tweak_column)
+    return df
+
+
 def cast_frame(_df):
     columns_set = set(_df.columns)
     in_df_str_cols = list(columns_set & string_columns)
@@ -265,7 +288,7 @@ def cast_frame(_df):
         ['veryeasy', 'easy', 'normal', 'hard', 'veryhard', 'epic']
     )
 
-    _df = (
+    _df = reorder_tweaks(
         _df.join(nuttyb_hp_df, on='tweakdefs1', how='left')
         .cast(
             {
@@ -285,6 +308,9 @@ def cast_frame(_df):
             pl.col('evocomxpmultiplier').fill_null(1),
             has_player_handicap=pl.col('AllyTeams').map_elements(
                 has_player_handicap, return_dtype=pl.Boolean
+            ),
+            barbarian=pl.col('AllyTeamsList').map_elements(
+                has_barbarian, return_dtype=pl.Boolean
             ),
         )
     )

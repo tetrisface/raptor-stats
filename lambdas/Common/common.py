@@ -7,7 +7,7 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-replays_file_name = 'replays.parquet'
+replay_root_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
 bucket_path = 's3://raptor-stats-parquet/'
 

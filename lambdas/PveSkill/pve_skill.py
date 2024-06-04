@@ -1,3 +1,4 @@
+import datetime
 import re
 import logging
 import sys
@@ -19,8 +20,9 @@ from Common.common import (
     get_df,
     get_secret,
     replay_details_file_name,
+    replay_root_file_name,
 )
-from Common.cast_frame import cast_frame
+from Common.cast_frame import cast_frame, reorder_tweaks
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -31,6 +33,10 @@ simplefilter(action='ignore', category=pl.PolarsWarning)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
+
+test = cast_frame(get_df(replay_details_file_name)).filter(
+    ~pl.col('is_player_ai_mixed') & pl.col('has_player_handicap').eq(False)
+)
 
 
 def main():
@@ -73,7 +79,9 @@ def process_games(games, prefix):
 
     # merge/coalesce players from harder into easier games
     for game in games.filter(
-        pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+        pl.col('raptors_win').eq(False)
+        if prefix == 'Raptors'
+        else pl.col('scavengers_win').eq(False)
     ).iter_rows(named=True):
         easier_games = games.filter(
             [~pl.col('id').eq(game['id'])]
@@ -193,7 +201,9 @@ def process_games(games, prefix):
             .n_unique()
             .alias('#Players'),
             pl.when(
-                pl.col('raptors_win').eq(False) | pl.col('scavengers_win').eq(False)
+                pl.col('raptors_win').eq(False)
+                if prefix == 'raptors'
+                else pl.col('scavengers_win').eq(False)
             )
             .then(pl.col('id'))
             .drop_nulls()
@@ -204,7 +214,11 @@ def process_games(games, prefix):
             .drop_nulls()
             .unique()
             .alias('Merged Win Replays'),
-            pl.when(pl.col('raptors_win').eq(True) | pl.col('scavengers_win').eq(True))
+            pl.when(
+                pl.col('raptors_win').eq(True)
+                if prefix == 'raptors'
+                else pl.col('scavengers_win').eq(True)
+            )
             .then(pl.col('id'))
             .drop_nulls()
             .unique()
@@ -234,6 +248,8 @@ def process_games(games, prefix):
         .alias('Setting Correlations')
     )
 
+    group_df = reorder_tweaks(group_df)
+
     pastes = []
     for row in group_df.iter_rows(named=True):
         pastes.append(
@@ -241,7 +257,7 @@ def process_games(games, prefix):
             + (f'!map {row["Map Name"]}\n' if row['Map Name'] else '')
             + '\n'.join(
                 [
-                    f'!{key} {re.sub("\\.0\\s*$", "", str(value))}'
+                    f'!{'bSet ' if 'tweak' in key else ''}{key} {re.sub("\\.0\\s*$", "", str(value))}'
                     for key, value in row.items()
                     if key in gamesetting_all_columns
                 ]
@@ -381,6 +397,10 @@ def update_sheets(df, skill_number_df, prefix):
     worksheet_gamesettings = spreadsheet.worksheet(prefix + ' Gamesettings')
     worksheet_gamesettings.clear()
     worksheet_gamesettings.update(
+        values=[['UPDATE IN PROGRESS']],
+        value_input_option=gspread.utils.ValueInputOption.user_entered,
+    )
+    worksheet_gamesettings.update(
         values=[df.columns] + df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
@@ -392,6 +412,21 @@ def update_sheets(df, skill_number_df, prefix):
     worksheet_skill_number.update(
         values=[skill_number_df.columns] + skill_number_df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
+    )
+
+    spreadsheet.batch_update(
+        {
+            'requests': [
+                {
+                    'updateSpreadsheetProperties': {
+                        'properties': {
+                            'title': f'{'[DEV] ' if dev else ''}PVE Skill, updated: {datetime.datetime.now(datetime.UTC):%Y-%m-%d %H:%M} UTC',
+                        },
+                        'fields': 'title',
+                    }
+                },
+            ]
+        }
     )
 
 
