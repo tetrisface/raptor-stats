@@ -309,9 +309,11 @@ def cast_frame(_df):
             has_player_handicap=pl.col('AllyTeams').map_elements(
                 has_player_handicap, return_dtype=pl.Boolean
             ),
-            barbarian=pl.col('AllyTeamsList').map_elements(
-                has_barbarian, return_dtype=pl.Boolean
-            ),
+            barbarian=(
+                pl.col('AllyTeamsList')
+                if 'AllyTeamsList' in _df.columns
+                else pl.col('AllyTeams')
+            ).map_elements(has_barbarian, return_dtype=pl.Boolean),
         )
     )
 

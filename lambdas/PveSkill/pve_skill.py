@@ -9,6 +9,7 @@ import gspread
 import polars as pl
 import polars.selectors as cs
 from warnings import simplefilter
+from collections import Counter
 
 from Common.gamesettings import (
     gamesettings,
@@ -33,10 +34,6 @@ simplefilter(action='ignore', category=pl.PolarsWarning)
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
-
-test = cast_frame(get_df(replay_details_file_name)).filter(
-    ~pl.col('is_player_ai_mixed') & pl.col('has_player_handicap').eq(False)
-)
 
 
 def main():
@@ -169,6 +166,24 @@ def process_games(games, prefix):
         )
         return gamesetting_result_row_items
 
+    def winrate(x):
+        df = (
+            pl.DataFrame(x['players_count'])
+            .join(
+                pl.DataFrame(x['winners_count'], {'winners': str, 'count': int}),
+                left_on='players',
+                right_on='winners',
+                how='left',
+            )
+            .fill_null(0)
+        )
+
+        return dict(
+            df.with_columns((pl.col('count_right') / pl.col('count')).alias('winrate'))
+            .drop(['count', 'count_right'])
+            .iter_rows()
+        )
+
     group_by_columns = ['Map Name'] + list(gamesetting_all_columns)
     group_df = (
         games.filter(pl.col('players_extended').len() > 0)
@@ -223,17 +238,35 @@ def process_games(games, prefix):
             .drop_nulls()
             .unique()
             .alias('Loss Replays'),
+            pl.col('winners').flatten().drop_nulls().unique().alias('winners_flat'),
             pl.when(pl.col('winners').list.len() > 0)
             .then(pl.col('winners'))
             .drop_nulls()
             .alias('games_winners'),
-            pl.col('winners').flatten().drop_nulls().unique().alias('winners_flat'),
+            pl.col('winners')
+            .flatten()
+            .drop_nulls()
+            .value_counts()
+            .alias('winners_count'),
+            pl.col('players')
+            .flatten()
+            .drop_nulls()
+            .value_counts()
+            .alias('players_count'),
         )
         .filter((pl.col('Success Rate') < 1) & (pl.col('Success Rate') > 0))
         .with_columns(
-            teammates_weighted_success_rate=pl.struct(
-                [pl.col('games_winners'), pl.col('Success Rate')]
-            ).map_batches(lambda x: pl.Series(teammates_weighted_success_rate(x)))
+            pl.struct(
+                [
+                    pl.col('games_winners'),
+                    pl.col('Success Rate'),
+                ]
+            )
+            .map_batches(lambda x: pl.Series(teammates_weighted_success_rate(x)))
+            .alias('teammates_weighted_success_rate'),
+            pl.struct(pl.col('winners_count'), pl.col('players_count'))
+            .map_elements(lambda x: winrate(x))
+            .alias('winrate'),
         )
     )
 
@@ -325,45 +358,56 @@ def process_games(games, prefix):
             .is_in(pl.col('winners_flat'))
             .alias('Setting Combinations'),
             pl.struct(
-                [
-                    pl.col('Player'),
-                    pl.col('Success Rate'),
-                    pl.col('teammates_weighted_success_rate'),
-                ]
+                pl.col('Player'),
+                pl.col('Success Rate'),
+                pl.col('teammates_weighted_success_rate'),
             )
             .map_elements(
                 lambda x: x['teammates_weighted_success_rate'][x['Player']]
                 if x['Player'] in x['teammates_weighted_success_rate']
-                else {'success_rate': x['Success Rate']}
+                else {'success_rate': 1.0}
             )
-            .alias('unnest_struct'),
+            .alias('teammates_unnest_struct'),
+            pl.struct(
+                pl.col('Player'),
+                pl.col('winrate'),
+            )
+            .map_elements(
+                lambda x: x['winrate'][x['Player']]
+                if x['Player'] in x['winrate']
+                else 0
+            )
+            .alias('winrate'),
         )
-        .unnest('unnest_struct')
+        .unnest('teammates_unnest_struct')
         .group_by('Player')
         .agg(
             pl.col('Success Rate').min().alias('Lowest Success Rate'),
-            pl.col('success_rate').min().alias('Teammates Completion'),
+            pl.col('success_rate').min().alias('S.R. Teammates Completion'),
             pl.col('Setting Combinations').sum(),
             pl.col('Setting Correlations').median(),
+            pl.col('winrate').drop_nulls().mean().alias('Winrate').fill_null(0),
         )
         .with_columns(
             pl.col('Lowest Success Rate')
             .rank(descending=True)
             .alias('Lowest Success Rate Rank'),
-            pl.col('Teammates Completion')
+            pl.col('S.R. Teammates Completion')
             .rank(descending=True)
-            .alias('Teammates Completion Rank'),
+            .alias('S.R. Teammates Completion Rank'),
             pl.col('Setting Combinations').rank().alias('Setting Combinations Rank'),
             pl.col('Setting Correlations')
             .rank(descending=True)
             .alias('Setting Correlations Rank'),
+            pl.col('Winrate').rank().alias('Winrate Rank'),
         )
         .with_columns(
             (
                 pl.col('Lowest Success Rate Rank')
-                + pl.col('Teammates Completion Rank') * 0.2
+                + pl.col('S.R. Teammates Completion Rank') * 0.2
                 + pl.col('Setting Combinations Rank') * 0.2
                 + pl.col('Setting Correlations Rank') * 0.01
+                + pl.col('Winrate Rank') * 0.06
             ).alias('Combined Rank'),
         )
         .with_columns(
