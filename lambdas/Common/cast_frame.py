@@ -16,8 +16,8 @@ string_columns = {
     'draft_mode',
     'experimentalshields',
     'experimentalstandardgravity',
-    'lootboxes_density',
     'lootboxes',
+    'lootboxes_density',
     'map_tidal',
     'raptor_raptorstart',
     'ruins_density',
@@ -27,16 +27,6 @@ string_columns = {
     'teamcolors_anonymous_mode',
     'teamcolors_icon_dev_mode',
     'transportenemy',
-    'tweakdefs',
-    'tweakdefs1',
-    'tweakdefs2',
-    'tweakdefs3',
-    'tweakdefs4',
-    'tweakdefs5',
-    'tweakdefs6',
-    'tweakdefs7',
-    'tweakdefs8',
-    'tweakdefs9',
     'tweakunits',
     'tweakunits1',
     'tweakunits2',
@@ -47,6 +37,16 @@ string_columns = {
     'tweakunits7',
     'tweakunits8',
     'tweakunits9',
+    'tweakdefs',
+    'tweakdefs1',
+    'tweakdefs2',
+    'tweakdefs3',
+    'tweakdefs4',
+    'tweakdefs5',
+    'tweakdefs6',
+    'tweakdefs7',
+    'tweakdefs8',
+    'tweakdefs9',
 }
 numerical_columns = {
     'ai_incomemultiplier',
@@ -306,6 +306,20 @@ def cast_frame(_df):
             pl.col('evocom').fill_null(0),
             pl.col('evocomleveluprate').fill_null(5),
             pl.col('evocomxpmultiplier').fill_null(1),
+            *[
+                pl.col(x).fill_null(0)
+                for x in numerical_columns
+                if 'unit_restrictions_' in x
+            ],
+            *[
+                pl.col(x).fill_null(0)
+                for x in [
+                    'april1extra',
+                    'april1',
+                    'easteregghunt',
+                    'easter_egg_hunt',
+                ]
+            ],
             has_player_handicap=pl.col('AllyTeams').map_elements(
                 has_player_handicap, return_dtype=pl.Boolean
             ),
@@ -316,5 +330,9 @@ def cast_frame(_df):
             ).map_elements(has_barbarian, return_dtype=pl.Boolean),
         )
     )
+
+    # _df[[s.name for s in _df if s.null_count() > 0] + ['startTime']].sort(
+    #     'startTime'
+    # ).glimpse()
 
     return _df

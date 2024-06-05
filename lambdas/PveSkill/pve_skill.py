@@ -9,7 +9,6 @@ import gspread
 import polars as pl
 import polars.selectors as cs
 from warnings import simplefilter
-from collections import Counter
 
 from Common.gamesettings import (
     gamesettings,
@@ -21,7 +20,6 @@ from Common.common import (
     get_df,
     get_secret,
     replay_details_file_name,
-    replay_root_file_name,
 )
 from Common.cast_frame import cast_frame, reorder_tweaks
 
@@ -46,15 +44,18 @@ def main():
 
 
 def process_games(games, prefix):
+    if prefix == 'Raptors':
+        ai_name = 'RaptorsAI'
+        ai_win_column = 'raptors_win'
+    elif prefix == 'Scavengers':
+        ai_name = 'ScavengersAI'
+        ai_win_column = 'scavengers_win'
+
     games = games.with_columns(
         pl.col('Map').struct.field('scriptName').alias('Map Name'),
         pl.lit([]).alias('Merged Win Replays'),
-        winners=pl.col('winners').list.set_difference(['RaptorsAI'])
-        if prefix == 'Raptors'
-        else pl.col('winners').list.set_difference(['ScavengersAI']),
-        players=pl.col('players').list.set_difference(['RaptorsAI'])
-        if prefix == 'Raptors'
-        else pl.col('players').list.set_difference(['ScavengersAI']),
+        winners=pl.col('winners').list.set_difference([ai_name]),
+        players=pl.col('players').list.set_difference([ai_name]),
     ).with_columns(
         winners_extended=pl.col('winners'),
         players_extended=pl.col('players'),
@@ -75,22 +76,32 @@ def process_games(games, prefix):
     )
 
     # merge/coalesce players from harder into easier games
-    for game in games.filter(
-        pl.col('raptors_win').eq(False)
-        if prefix == 'Raptors'
-        else pl.col('scavengers_win').eq(False)
-    ).iter_rows(named=True):
-        easier_games = games.filter(
-            [~pl.col('id').eq(game['id'])]
-            + [
-                pl.col(x).eq_missing(game[x])
-                for x in gamesetting_equal_columns | {'Map Name'}
+    for game in games.filter((pl.col(ai_win_column).eq(False))).iter_rows(named=True):
+        if any(
+            [
+                v is None
+                for k, v in game.items()
+                if k
+                in gamesetting_equal_columns
+                | {'Map Name'}
+                | lower_harder
+                | higher_harder
             ]
-            + [pl.col(x).le(game[x]) for x in higher_harder]
-            + [pl.col(x).ge(game[x]) for x in lower_harder]
+        ):
+            continue
+        easier_games = games.filter(
+            pl.col('id').ne(game['id']),
+            *[
+                # ((pl.col(x).is_null() & (game[x] is None)) | pl.col(x).eq(game[x]))
+                pl.col(x).eq(game[x])
+                for x in gamesetting_equal_columns | {'Map Name'}
+            ],
+            *[pl.col(x).le(game[x]) for x in higher_harder],
+            *[pl.col(x).ge(game[x]) for x in lower_harder],
         )
 
         if len(easier_games) == 0:
+            # logger.info(f'no easier games for {game["id"]}')
             continue
 
         games = games.update(
@@ -161,9 +172,6 @@ def process_games(games, prefix):
                 if 'teammates' in gamesetting_result_row_item[result_winner]:
                     del gamesetting_result_row_item[result_winner]['teammates']
 
-        logger.info(
-            f'weighting {len(gamesetting_result_row_items)} teammate success rates done'
-        )
         return gamesetting_result_row_items
 
     def winrate(x):
@@ -215,11 +223,7 @@ def process_games(games, prefix):
             .drop_nulls()
             .n_unique()
             .alias('#Players'),
-            pl.when(
-                pl.col('raptors_win').eq(False)
-                if prefix == 'raptors'
-                else pl.col('scavengers_win').eq(False)
-            )
+            pl.when(pl.col(ai_win_column).eq(False))
             .then(pl.col('id'))
             .drop_nulls()
             .unique()
@@ -229,11 +233,7 @@ def process_games(games, prefix):
             .drop_nulls()
             .unique()
             .alias('Merged Win Replays'),
-            pl.when(
-                pl.col('raptors_win').eq(True)
-                if prefix == 'raptors'
-                else pl.col('scavengers_win').eq(True)
-            )
+            pl.when(pl.col(ai_win_column).ne(False))
             .then(pl.col('id'))
             .drop_nulls()
             .unique()
@@ -254,22 +254,33 @@ def process_games(games, prefix):
             .value_counts()
             .alias('players_count'),
         )
-        .filter((pl.col('Success Rate') < 1) & (pl.col('Success Rate') > 0))
-        .with_columns(
-            pl.struct(
-                [
-                    pl.col('games_winners'),
-                    pl.col('Success Rate'),
-                ]
-            )
-            .map_batches(lambda x: pl.Series(teammates_weighted_success_rate(x)))
-            .alias('teammates_weighted_success_rate'),
-            pl.struct(pl.col('winners_count'), pl.col('players_count'))
-            .map_elements(lambda x: winrate(x))
-            .alias('winrate'),
-        )
     )
 
+    group_df = pl.concat(
+        [
+            group_df.filter(pl.col('Success Rate') == 0)
+            .sort('#Players', descending=True)
+            .limit(10),
+            group_df.filter(pl.col('Success Rate').is_between(0, 1, closed='none')),
+            group_df.filter(pl.col('Success Rate') == 1)
+            .sort('#Players', descending=True)
+            .limit(10),
+        ]
+    ).with_columns(
+        pl.struct(
+            [
+                pl.col('games_winners'),
+                pl.col('Success Rate'),
+            ]
+        )
+        .map_batches(lambda x: pl.Series(teammates_weighted_success_rate(x)))
+        .alias('teammates_weighted_success_rate'),
+        pl.struct(pl.col('winners_count'), pl.col('players_count'))
+        .map_elements(lambda x: winrate(x))
+        .alias('winrate'),
+    )
+
+    logger.info('creating correlations')
     group_df = group_df.with_columns(
         group_df.select(group_by_columns)
         .select(cs.numeric())
@@ -283,21 +294,35 @@ def process_games(games, prefix):
 
     group_df = reorder_tweaks(group_df)
 
+    logger.info('creating pastes')
     pastes = []
-    for row in group_df.iter_rows(named=True):
-        pastes.append(
-            '\n!preset coop\n'
-            + (f'!map {row["Map Name"]}\n' if row['Map Name'] else '')
-            + '\n'.join(
-                [
-                    f'!{'bSet ' if 'tweak' in key else ''}{key} {re.sub("\\.0\\s*$", "", str(value))}'
-                    for key, value in row.items()
-                    if key in gamesetting_all_columns
-                ]
-            )
-            + '\n\n'
+    for index, row in enumerate(group_df.iter_rows(named=True)):
+        _str = '\n!preset coop\n' + (
+            f'!map {row["Map Name"]}\n' if row['Map Name'] else ''
         )
 
+        for key, value in row.items():
+            if key not in gamesetting_all_columns or value is None or value == '':
+                continue
+
+            value = re.sub('\\.0\\s*$', '', str(value))
+
+            if ('multiplier_' in key and value == '1') or (
+                'unit_restrictions_' in key and value == '0'
+            ):
+                continue
+
+            if 'tweak' in key:
+                _str += f'!bSet {key} {value}\n'
+            else:
+                _str += f'!{key} {re.sub("\\.0\\s*$", "", str(value))}\n'
+
+        pastes.append(
+            _str
+            + f'$welcome-message Settings from http://docs.google.com/spreadsheets/d/{'1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE' if dev else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'}#gid=0&range=I{index+2}\n'
+        )
+
+    logger.info('creating export df')
     group_export_df = (
         group_df.with_columns(
             pl.col('winners')
@@ -386,7 +411,7 @@ def process_games(games, prefix):
             pl.col('success_rate').min().alias('S.R. Teammates Completion'),
             pl.col('Setting Combinations').sum(),
             pl.col('Setting Correlations').median(),
-            pl.col('winrate').drop_nulls().mean().alias('Winrate').fill_null(0),
+            # pl.col('winrate').drop_nulls().mean().alias('Winrate').fill_null(0),
         )
         .with_columns(
             pl.col('Lowest Success Rate')
@@ -399,7 +424,7 @@ def process_games(games, prefix):
             pl.col('Setting Correlations')
             .rank(descending=True)
             .alias('Setting Correlations Rank'),
-            pl.col('Winrate').rank().alias('Winrate Rank'),
+            # pl.col('Winrate').rank().alias('Winrate Rank'),
         )
         .with_columns(
             (
@@ -407,7 +432,7 @@ def process_games(games, prefix):
                 + pl.col('S.R. Teammates Completion Rank') * 0.2
                 + pl.col('Setting Combinations Rank') * 0.2
                 + pl.col('Setting Correlations Rank') * 0.01
-                + pl.col('Winrate Rank') * 0.06
+                # + pl.col('Winrate Rank') * 0.06
             ).alias('Combined Rank'),
         )
         .with_columns(
@@ -439,11 +464,12 @@ def update_sheets(df, skill_number_df, prefix):
         spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
 
     worksheet_gamesettings = spreadsheet.worksheet(prefix + ' Gamesettings')
-    worksheet_gamesettings.clear()
-    worksheet_gamesettings.update(
-        values=[['UPDATE IN PROGRESS']],
-        value_input_option=gspread.utils.ValueInputOption.user_entered,
-    )
+    # worksheet_gamesettings.clear()
+    # worksheet_gamesettings.update(
+    #     values=[['UPDATE IN PROGRESS']],
+    #     value_input_option=gspread.utils.ValueInputOption.user_entered,
+    # )
+    logger.info(f'pushing {len(df)} {prefix} gamesettings')
     worksheet_gamesettings.update(
         values=[df.columns] + df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
