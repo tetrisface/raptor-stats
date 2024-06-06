@@ -258,9 +258,9 @@ def process_games(games, prefix):
 
     group_df = pl.concat(
         [
-            group_df.filter(pl.col('Success Rate') == 0)
+            group_df.filter((pl.col('Success Rate') == 0) & (pl.col('#Players') > 15))
             .sort('#Players', descending=True)
-            .limit(10),
+            .limit(15),
             group_df.filter(pl.col('Success Rate').is_between(0, 1, closed='none')),
             group_df.filter(pl.col('Success Rate') == 1)
             .sort('#Players', descending=True)
@@ -375,7 +375,7 @@ def process_games(games, prefix):
 
     logger.info('export group done')
 
-    pve_skill_players = (
+    pve_rating_players = (
         group_df.explode('winners')
         .rename({'winners': 'Player'})
         .with_columns(
@@ -445,17 +445,16 @@ def process_games(games, prefix):
                     )
                 )
                 * (50 - 0)
-            ).alias('PVE Skill'),
+            ).alias('PVE Rating'),
         )
-        .sort(by=['PVE Skill', 'Player'], descending=[True, False])
+        .sort(by=['PVE Rating', 'Player'], descending=[True, False])
     )
 
     logger.info('updating sheets')
+    update_sheets(group_export_df, pve_rating_players, prefix=prefix)
 
-    update_sheets(group_export_df, pve_skill_players, prefix=prefix)
 
-
-def update_sheets(df, skill_number_df, prefix):
+def update_sheets(df, rating_number_df, prefix):
     if dev:
         gc = gspread.service_account()
         spreadsheet = gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
@@ -476,11 +475,10 @@ def update_sheets(df, skill_number_df, prefix):
     )
 
     del df
-
-    worksheet_skill_number = spreadsheet.worksheet(prefix + ' PVE Skill')
-    worksheet_skill_number.clear()
-    worksheet_skill_number.update(
-        values=[skill_number_df.columns] + skill_number_df.rows(),
+    worksheet_rating_number = spreadsheet.worksheet(prefix + ' PVE Rating')
+    worksheet_rating_number.clear()
+    worksheet_rating_number.update(
+        values=[rating_number_df.columns] + rating_number_df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
 
@@ -490,7 +488,7 @@ def update_sheets(df, skill_number_df, prefix):
                 {
                     'updateSpreadsheetProperties': {
                         'properties': {
-                            'title': f'{'[DEV] ' if dev else ''}PVE Skill, updated: {datetime.datetime.now(datetime.UTC):%Y-%m-%d %H:%M} UTC',
+                            'title': f'{'[DEV] ' if dev else ''}PVE Rating, updated: {datetime.datetime.now(datetime.UTC):%Y-%m-%d %H:%M} UTC',
                         },
                         'fields': 'title',
                     }

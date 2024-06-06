@@ -331,7 +331,7 @@ higher_harder = {
     'raptor_firstwavesboost',
     # 'raptor_raptorstart', # uncertain
     'raptor_spawncountmult',
-    'ruins_only_t1',
+    # 'ruins_only_t1',
     'scav_difficulty',
     'unit_restrictions_noextractors',
     'unit_restrictions_notech2',

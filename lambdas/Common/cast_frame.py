@@ -289,7 +289,11 @@ def cast_frame(_df):
     )
 
     _df = reorder_tweaks(
-        _df.join(nuttyb_hp_df, on='tweakdefs1', how='left')
+        _df.join(
+            nuttyb_hp_df,
+            on='tweakdefs1',
+            how='left',
+        )
         .cast(
             {
                 **{string_col: str for string_col in in_df_str_cols},
@@ -330,7 +334,6 @@ def cast_frame(_df):
             ).map_elements(has_barbarian, return_dtype=pl.Boolean),
         )
     )
-
     # _df[[s.name for s in _df if s.null_count() > 0] + ['startTime']].sort(
     #     'startTime'
     # ).glimpse()
