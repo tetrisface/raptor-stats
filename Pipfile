@@ -14,6 +14,10 @@ s3fs = "*"
 xlsxwriter = "*"
 scikit-learn = "*"
 numpy = "*"
+tqdm = "*"
+plotly = "*"
+nbformat = "*"
+ipykernel = "*"
 
 [dev-packages]
 guppy3 = "*"

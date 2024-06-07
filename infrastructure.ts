@@ -61,7 +61,7 @@ export class RaptorStatsStack extends cdk.Stack {
         }),
         functionName: 'PveSkill',
         timeout: cdk.Duration.seconds(220),
-        memorySize: 1200,
+        memorySize: 2000,
       },
     })
 

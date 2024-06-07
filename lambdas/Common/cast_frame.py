@@ -48,7 +48,7 @@ string_columns = {
     'tweakdefs8',
     'tweakdefs9',
 }
-numerical_columns = {
+int_columns = {
     'ai_incomemultiplier',
     'air_rework',
     'allowpausegameplay',
@@ -79,7 +79,6 @@ numerical_columns = {
     'energy_share_rework',
     'energyperpoint',
     'evocom',
-    'evocomxpmultiplier',
     'experimentalextraunits',
     'experimentalimprovedtransports',
     'experimentallegionfaction',
@@ -90,7 +89,6 @@ numerical_columns = {
     'experimentalrebalancet2metalextractors',
     'experimentalrebalancewreckstandarization',
     'experimentalreversegear',
-    'experimentalxpgain',
     'faction_limiter',
     'ffa_wreckage',
     'fixedallies',
@@ -110,17 +108,11 @@ numerical_columns = {
     'proposed_unit_reworks',
     'ranked_game',
     'raptor_endless',
-    'raptor_firstwavesboost',
-    'raptor_graceperiodmult',
-    'raptor_queentimemult',
     'raptor_spawncountmult',
-    'raptor_spawntimemult',
     'releasecandidates',
     'ruins_civilian_disable',
     'ruins_only_t1',
-    'scav_bosstimemult',
     'scav_endless',
-    'scav_graceperiodmult',
     'scav_spawncountmult',
     'scav_spawntimemult',
     'scoremode_chess_adduptime',
@@ -154,7 +146,8 @@ numerical_columns = {
 
 float_columns = {
     'evocomleveluprate',
-    'unbacomleveluprate',
+    'evocomxpmultiplier',
+    'experimentalxpgain',
     'multiplier_builddistance',
     'multiplier_buildpower',
     'multiplier_buildtimecost',
@@ -172,6 +165,14 @@ float_columns = {
     'multiplier_turnrate',
     'multiplier_weapondamage',
     'multiplier_weaponrange',
+    'raptor_firstwavesboost',
+    'raptor_graceperiodmult',
+    'raptor_queentimemult',
+    'raptor_spawntimemult',
+    'scav_bosstimemult',
+    'scav_graceperiodmult',
+    'scav_spawntimemult',
+    'unbacomleveluprate',
 }
 
 logger = logging.getLogger()
@@ -207,6 +208,8 @@ def has_barbarian(allyTeams):
 
 
 def reorder_column(df, new_position, col_name):
+    if col_name not in df.columns:
+        return df
     neworder = df.columns
     neworder.remove(col_name)
     neworder.insert(new_position, col_name)
@@ -220,15 +223,66 @@ def reorder_tweaks(df):
     return df
 
 
+def drop_null_empty_cols(_df):
+    before_drop_cols = set(_df.columns)
+    _df = _df[
+        [
+            s.name
+            for s in _df
+            if not (
+                (s.null_count() == _df.height) | (s.dtype == str and (s == '').all())
+            )
+        ]
+    ]
+    logger.info(f'Dropped columns: {before_drop_cols - set(_df.columns)}')
+    return _df
+
+
+def awards(row):
+    ids_names = {}
+    for team in row['AllyTeams']:
+        for player in team['Players']:
+            if 'Players' in team:
+                ids_names[player['teamId']] = player['name']
+
+    damage_award = None
+    eco_award = None
+
+    try:
+        damage_award = ids_names[row['awards']['fightingUnitsDestroyed'][0]['teamId']]
+    except KeyError:
+        pass
+
+    try:
+        eco_award = ids_names[row['awards']['mostResourcesProduced']['teamId']]
+    except KeyError:
+        pass
+
+    return {
+        'damage_award': damage_award,
+        'eco_award': eco_award,
+    }
+
+
+def add_computed_cols(_df):
+    _df = _df.filter(
+        pl.col('AllyTeams').is_not_null() & pl.col('awards').is_not_null()
+    ).with_columns(
+        pl.struct('AllyTeams', 'awards').map_elements(awards).alias('damage_eco_award')
+    )
+
+    return _df
+
+
 def cast_frame(_df):
     columns_set = set(_df.columns)
     in_df_str_cols = list(columns_set & string_columns)
-    in_df_num_cols = list(columns_set & numerical_columns)
+    in_df_num_cols = list(columns_set & int_columns)
     in_df_float_cols = list(columns_set & float_columns)
 
     accounted_for_columns = (
         string_columns
-        | numerical_columns
+        | int_columns
         | float_columns
         | {
             'AllyTeams',
@@ -306,23 +360,27 @@ def cast_frame(_df):
         )
         .with_columns(
             pl.col(in_df_str_cols).fill_null(''),
-            pl.col('forceallunits').fill_null(0),
-            pl.col('evocom').fill_null(0),
             pl.col('evocomleveluprate').fill_null(5),
-            pl.col('evocomxpmultiplier').fill_null(1),
-            *[
-                pl.col(x).fill_null(0)
-                for x in numerical_columns
-                if 'unit_restrictions_' in x
-            ],
+            *[pl.col(x).fill_null(0) for x in int_columns if 'unit_restrictions_' in x],
             *[
                 pl.col(x).fill_null(0)
                 for x in [
-                    'april1extra',
                     'april1',
-                    'easteregghunt',
+                    'april1extra',
                     'easter_egg_hunt',
+                    'easteregghunt',
+                    'evocom',
+                    'forceallunits',
                 ]
+                if x in _df.columns
+            ],
+            *[
+                pl.col(x).fill_null(1)
+                for x in [
+                    'evocomxpmultiplier',
+                    'scav_graceperiodmult',
+                ]
+                if x in _df.columns
             ],
             has_player_handicap=pl.col('AllyTeams').map_elements(
                 has_player_handicap, return_dtype=pl.Boolean

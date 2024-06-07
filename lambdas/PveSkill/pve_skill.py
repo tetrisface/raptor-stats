@@ -6,6 +6,7 @@ import os
 import json
 
 import gspread
+import numpy as np
 import polars as pl
 import polars.selectors as cs
 from warnings import simplefilter
@@ -21,7 +22,11 @@ from Common.common import (
     get_secret,
     replay_details_file_name,
 )
-from Common.cast_frame import cast_frame, reorder_tweaks
+from Common.cast_frame import (
+    add_computed_cols,
+    cast_frame,
+    reorder_tweaks,
+)
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -33,9 +38,31 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
 
+gamesetting_equal_columns = set(possible_tweak_columns)
+for gamesetting in gamesettings.values():
+    gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
+
+gamesetting_equal_columns = (
+    gamesetting_equal_columns - set(lower_harder) - set(higher_harder)
+)
+
+teammates_completion_fit_input, teammates_completion_fit_output = zip(
+    *[
+        (1, 1.15),
+        (2, 4),
+        (5, 12),
+        (16, 25),
+    ]
+)
+A = np.array([[x**2, x, 1] for x in teammates_completion_fit_input])
+b = np.array(teammates_completion_fit_output)
+teammates_coef_a, teammates_coef_b, teammates_coef_c = np.linalg.lstsq(
+    A, b, rcond=None
+)[0]
+
 
 def main():
-    _games = cast_frame(get_df(replay_details_file_name)).filter(
+    _games = add_computed_cols(cast_frame(get_df(replay_details_file_name))).filter(
         ~pl.col('is_player_ai_mixed') & pl.col('has_player_handicap').eq(False)
     )
 
@@ -47,9 +74,24 @@ def process_games(games, prefix):
     if prefix == 'Raptors':
         ai_name = 'RaptorsAI'
         ai_win_column = 'raptors_win'
+        ai_gamesetting_equal_columns = {
+            x for x in gamesetting_equal_columns if 'scav_' not in x
+        }
+        ai_gamesetting_lower_harder = {x for x in lower_harder if 'scav_' not in x}
+        ai_gamesetting_higher_harder = {x for x in higher_harder if 'scav_' not in x}
     elif prefix == 'Scavengers':
         ai_name = 'ScavengersAI'
         ai_win_column = 'scavengers_win'
+        ai_gamesetting_equal_columns = {
+            x for x in gamesetting_equal_columns if 'raptor_' not in x
+        }
+        ai_gamesetting_lower_harder = {x for x in lower_harder if 'raptor_' not in x}
+        ai_gamesetting_higher_harder = {x for x in higher_harder if 'raptor_' not in x}
+    ai_gamesetting_all_columns = sorted(
+        ai_gamesetting_equal_columns
+        | ai_gamesetting_lower_harder
+        | ai_gamesetting_higher_harder
+    )
 
     games = games.with_columns(
         pl.col('Map').struct.field('scriptName').alias('Map Name'),
@@ -63,41 +105,100 @@ def process_games(games, prefix):
 
     logger.info(f'total replays {len(games)}')
 
-    gamesetting_equal_columns = set(possible_tweak_columns)
-    for gamesetting in gamesettings.values():
-        gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
-
-    gamesetting_equal_columns = (
-        gamesetting_equal_columns - set(lower_harder) - set(higher_harder)
-    )
-
-    gamesetting_all_columns = sorted(
-        (gamesetting_equal_columns) | set(lower_harder) | set(higher_harder)
+    basic_player_aggregates = (
+        games.unnest('damage_eco_award')
+        .explode('players')
+        .rename({'players': 'Player'})
+        .group_by('Player')
+        .agg(
+            pl.col('Player').is_in('winners').mean().alias('Win Rate'),
+            (
+                pl.when(
+                    pl.col('Player').eq(pl.col('damage_award'))
+                    & pl.col('Player').is_in('winners')
+                    & pl.col('players_extended').list.len().gt(1)
+                )
+                .then(1)
+                .otherwise(0)
+                + pl.when(
+                    pl.col('Player').eq(pl.col('eco_award'))
+                    & pl.col('Player').is_in('winners')
+                    & pl.col('players_extended').list.len().gt(1)
+                )
+                .then(1)
+                .otherwise(0)
+            )
+            .mean()
+            .alias('Award Rate'),
+            (
+                (
+                    (
+                        pl.when(
+                            pl.col('Player').eq(pl.col('damage_award'))
+                            & pl.col('Player').is_in('winners')
+                            & pl.col('players_extended').list.len().gt(1)
+                        )
+                        .then(1)
+                        .otherwise(0)
+                        + pl.when(
+                            pl.col('Player').eq(pl.col('eco_award'))
+                            & pl.col('Player').is_in('winners')
+                            & pl.col('players_extended').list.len().gt(1)
+                        )
+                        .then(1)
+                        .otherwise(0)
+                    )
+                    * (pl.col('players_extended').list.len() - 1)
+                ).mean()
+            ).alias('Weighted Award Rate'),
+        )
     )
 
     # merge/coalesce players from harder into easier games
     for game in games.filter((pl.col(ai_win_column).eq(False))).iter_rows(named=True):
+        # for game in games.filter(
+        #     (pl.col('id').eq('a035616604a68c9d6815cbe3a2d25e40'))
+        # ).iter_rows(named=True):
         if any(
             [
                 v is None
                 for k, v in game.items()
                 if k
-                in gamesetting_equal_columns
-                | {'Map Name'}
-                | lower_harder
-                | higher_harder
+                in (
+                    ai_gamesetting_equal_columns
+                    | {'Map Name'}
+                    | ai_gamesetting_lower_harder
+                    | ai_gamesetting_higher_harder
+                )
+                - {'nuttyb_hp'}
             ]
         ):
             continue
+
+        _ai_gamesetting_equal_columns = ai_gamesetting_equal_columns
+        _ai_gamesetting_higher_harder = ai_gamesetting_higher_harder
+        _ai_gamesetting_lower_harder = ai_gamesetting_lower_harder
+
+        if game['evocom'] == 0:
+            _ai_gamesetting_equal_columns = {
+                x for x in ai_gamesetting_equal_columns if 'evocom' not in x
+            }
+            _ai_gamesetting_higher_harder = {
+                x for x in ai_gamesetting_higher_harder if 'evocom' not in x
+            }
+            _ai_gamesetting_lower_harder = {
+                x for x in ai_gamesetting_lower_harder if 'evocom' not in x
+            }
+
         easier_games = games.filter(
             pl.col('id').ne(game['id']),
             *[
                 # ((pl.col(x).is_null() & (game[x] is None)) | pl.col(x).eq(game[x]))
                 pl.col(x).eq(game[x])
-                for x in gamesetting_equal_columns | {'Map Name'}
+                for x in (_ai_gamesetting_equal_columns | {'Map Name'})
             ],
-            *[pl.col(x).le(game[x]) for x in higher_harder],
-            *[pl.col(x).ge(game[x]) for x in lower_harder],
+            *[pl.col(x).le(game[x]) for x in _ai_gamesetting_higher_harder],
+            *[pl.col(x).ge(game[x]) for x in _ai_gamesetting_lower_harder],
         )
 
         if len(easier_games) == 0:
@@ -123,7 +224,12 @@ def process_games(games, prefix):
     def teammates_weighted_success_rate(in_struct):
         logger.info(f'weighting {len(in_struct)} teammate success rates')
         winners = {
-            x: {'teammates': set(), 'success_rate': 1.0}
+            x: {
+                'success_rate': 1.0,
+                'teammates_completion': 1.0,
+                'teammates': set(),
+                'wins': 0,
+            }
             for x in set(
                 [
                     winner
@@ -137,62 +243,59 @@ def process_games(games, prefix):
         gamesetting_result_row_items = []
         for gamesetting in in_struct:
             gamesetting_result_row_item = winners.copy()
-            success_rate = gamesetting['Success Rate']
-            for result_winner in gamesetting_result_row_item.keys():
-                if (
-                    gamesetting_result_row_item[result_winner]['success_rate']
-                    <= success_rate
-                ):
+            success_rate_goal = gamesetting['Success Rate']
+            for result_winner_name in gamesetting_result_row_item.keys():
+                result_winner = gamesetting_result_row_item[result_winner_name]
+                if result_winner['teammates_completion'] <= success_rate_goal:
                     continue
-                for teammates in gamesetting['games_winners']:
-                    teammates = set(teammates)
-                    if result_winner not in teammates:
+                for game_teammates in gamesetting['games_winners']:
+                    game_teammates = set(game_teammates)
+                    if result_winner_name not in game_teammates:
                         continue
 
                     new_teammates = (
-                        teammates
-                        - gamesetting_result_row_item[result_winner]['teammates']
-                        - {result_winner}
+                        game_teammates
+                        - result_winner['teammates']
+                        - {result_winner_name}
                     )
-                    if len(new_teammates) == 0 and len(teammates) != 1:
-                        continue
-                    x = len(new_teammates) + 1
-                    gamesetting_result_row_item[result_winner]['success_rate'] = max(
-                        success_rate,
-                        gamesetting_result_row_item[result_winner]['success_rate']
-                        - success_rate / min(1, -0.0603 * (x**2) + 2.6371 * x - 1.7648),
+                    result_winner['teammates'] |= new_teammates
+                    lobby_size = len(game_teammates)
+                    n_new_teammates_and_me = len(new_teammates) + 1
+                    teammates_completion_subtract = (1 - success_rate_goal) / (
+                        (
+                            teammates_coef_a * (lobby_size**2)
+                            + teammates_coef_b * lobby_size
+                            + teammates_coef_c
+                        )
+                        / n_new_teammates_and_me
                     )
-                    gamesetting_result_row_item[result_winner]['teammates'] |= (
-                        new_teammates
+                    result_winner['wins'] += 1
+                    # logger.info(
+                    #     f'{success_rate_goal:.2f}: {result_winner['success_rate']:.2f} -> {result_winner['success_rate'] - teammates_completion_subtract:.2f} new_teammates {n_new_teammates_and_me} lobby {lobby_size}'
+                    # )
+                    result_winner['success_rate'] -= teammates_completion_subtract
+                    result_winner['teammates_completion'] = max(
+                        success_rate_goal,
+                        result_winner['success_rate']
+                        - (
+                            (1 - result_winner['success_rate'])
+                            # / max(1, 2 / result_winner['wins'])
+                            / 1
+                        ),
                     )
+                gamesetting_result_row_item[result_winner_name] = result_winner
             gamesetting_result_row_items.append(gamesetting_result_row_item)
 
         for gamesetting_result_row_item in gamesetting_result_row_items:
-            for result_winner in gamesetting_result_row_item.keys():
-                if 'teammates' in gamesetting_result_row_item[result_winner]:
-                    del gamesetting_result_row_item[result_winner]['teammates']
-
+            for result_winner_name in gamesetting_result_row_item.keys():
+                gamesetting_result_row_item[result_winner_name] = (
+                    gamesetting_result_row_item[
+                        result_winner_name
+                    ]['teammates_completion']
+                )
         return gamesetting_result_row_items
 
-    def winrate(x):
-        df = (
-            pl.DataFrame(x['players_count'])
-            .join(
-                pl.DataFrame(x['winners_count'], {'winners': str, 'count': int}),
-                left_on='players',
-                right_on='winners',
-                how='left',
-            )
-            .fill_null(0)
-        )
-
-        return dict(
-            df.with_columns((pl.col('count_right') / pl.col('count')).alias('winrate'))
-            .drop(['count', 'count_right'])
-            .iter_rows()
-        )
-
-    group_by_columns = ['Map Name'] + list(gamesetting_all_columns)
+    group_by_columns = ['Map Name'] + list(ai_gamesetting_all_columns)
     group_df = (
         games.filter(pl.col('players_extended').len() > 0)
         .group_by(group_by_columns)
@@ -275,9 +378,6 @@ def process_games(games, prefix):
         )
         .map_batches(lambda x: pl.Series(teammates_weighted_success_rate(x)))
         .alias('teammates_weighted_success_rate'),
-        pl.struct(pl.col('winners_count'), pl.col('players_count'))
-        .map_elements(lambda x: winrate(x))
-        .alias('winrate'),
     )
 
     logger.info('creating correlations')
@@ -302,7 +402,7 @@ def process_games(games, prefix):
         )
 
         for key, value in row.items():
-            if key not in gamesetting_all_columns or value is None or value == '':
+            if key not in ai_gamesetting_all_columns or value is None or value == '':
                 continue
 
             value = re.sub('\\.0\\s*$', '', str(value))
@@ -367,7 +467,7 @@ def process_games(games, prefix):
                 'Copy Paste',
             ]
             + ['Map Name']
-            + list(gamesetting_all_columns)
+            + list(ai_gamesetting_all_columns)
         )
         .rename({'Map Name': 'Map'})
         .sort(by='Success Rate', descending=False)
@@ -390,29 +490,19 @@ def process_games(games, prefix):
             .map_elements(
                 lambda x: x['teammates_weighted_success_rate'][x['Player']]
                 if x['Player'] in x['teammates_weighted_success_rate']
-                else {'success_rate': 1.0}
+                else 1.0
             )
-            .alias('teammates_unnest_struct'),
-            pl.struct(
-                pl.col('Player'),
-                pl.col('winrate'),
-            )
-            .map_elements(
-                lambda x: x['winrate'][x['Player']]
-                if x['Player'] in x['winrate']
-                else 0
-            )
-            .alias('winrate'),
+            .alias('teammates_completion'),
         )
-        .unnest('teammates_unnest_struct')
         .group_by('Player')
         .agg(
             pl.col('Success Rate').min().alias('Lowest Success Rate'),
-            pl.col('success_rate').min().alias('S.R. Teammates Completion'),
+            pl.col('teammates_completion').min().alias('S.R. Teammates Completion'),
             pl.col('Setting Combinations').sum(),
             pl.col('Setting Correlations').median(),
-            # pl.col('winrate').drop_nulls().mean().alias('Winrate').fill_null(0),
         )
+        .join(basic_player_aggregates, on='Player', how='left', validate='1:1')
+        .drop_nulls('Player')
         .with_columns(
             pl.col('Lowest Success Rate')
             .rank(descending=True)
@@ -424,15 +514,17 @@ def process_games(games, prefix):
             pl.col('Setting Correlations')
             .rank(descending=True)
             .alias('Setting Correlations Rank'),
-            # pl.col('Winrate').rank().alias('Winrate Rank'),
+            pl.col('Win Rate').rank().alias('Win Rate Rank'),
+            pl.col('Weighted Award Rate').rank().alias('Weighted Award Rate Rank'),
         )
         .with_columns(
             (
-                pl.col('Lowest Success Rate Rank')
-                + pl.col('S.R. Teammates Completion Rank') * 0.2
+                pl.col('Lowest Success Rate Rank') * 0.5
+                + pl.col('S.R. Teammates Completion Rank') * 1
                 + pl.col('Setting Combinations Rank') * 0.2
-                + pl.col('Setting Correlations Rank') * 0.01
-                # + pl.col('Winrate Rank') * 0.06
+                + pl.col('Setting Correlations Rank') * 0.0001
+                + pl.col('Win Rate Rank') * 0.005
+                + pl.col('Weighted Award Rate Rank') * 1
             ).alias('Combined Rank'),
         )
         .with_columns(
@@ -444,11 +536,13 @@ def process_games(games, prefix):
                         - (pl.col('Combined Rank')).min()
                     )
                 )
-                * (50 - 0)
+                * (30 - 0)
             ).alias('PVE Rating'),
         )
         .sort(by=['PVE Rating', 'Player'], descending=[True, False])
+        .fill_nan('')
     )
+    # pl.Config(tbl_rows=50, tbl_cols=111)
 
     logger.info('updating sheets')
     update_sheets(group_export_df, pve_rating_players, prefix=prefix)
@@ -477,6 +571,7 @@ def update_sheets(df, rating_number_df, prefix):
     del df
     worksheet_rating_number = spreadsheet.worksheet(prefix + ' PVE Rating')
     worksheet_rating_number.clear()
+    logger.info(f'pushing {len(rating_number_df)} {prefix} pve player ratings')
     worksheet_rating_number.update(
         values=[rating_number_df.columns] + rating_number_df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
