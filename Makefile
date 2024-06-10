@@ -23,7 +23,7 @@ run:
 	aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
 
 run-dev:
-	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m PveSkill.pve_skill)
+	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m PveRating.pve_rating)
 
 install:
 	cdk deploy
@@ -37,7 +37,7 @@ tail-stats:
 	aws logs tail /aws/lambda/RaptorStats --follow
 
 tail-skill:
-	aws logs tail /aws/lambda/PveSkill --follow
+	aws logs tail /aws/lambda/PveRating --follow
 
 upload:
 	aws s3 cp lambdas/replays.parquet s3://raptor-stats-parquet/replays.parquet

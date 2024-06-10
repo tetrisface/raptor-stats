@@ -305,10 +305,10 @@ def process_games(games, prefix):
                 / pl.col('players_extended').flatten().drop_nulls().n_unique()
             ).alias('Success Rate'),
             pl.col('winners_extended')
+            .sort_by('startTime', descending=True)
             .flatten()
             .drop_nulls()
-            .unique()
-            .sort()
+            .unique(maintain_order=True)
             .alias('winners'),
             pl.col('winners_extended')
             .flatten()
@@ -316,10 +316,10 @@ def process_games(games, prefix):
             .n_unique()
             .alias('#Winners'),
             pl.col('players_extended')
+            .sort_by('startTime', descending=True)
             .flatten()
             .drop_nulls()
-            .unique()
-            .sort()
+            .unique(maintain_order=True)
             .alias('Players'),
             pl.col('players_extended')
             .flatten()
@@ -327,19 +327,20 @@ def process_games(games, prefix):
             .n_unique()
             .alias('#Players'),
             pl.when(pl.col(ai_win_column).eq(False))
-            .then(pl.col('id'))
+            .then(pl.col('id').sort_by('startTime', descending=False))
             .drop_nulls()
-            .unique()
+            .unique(maintain_order=True)
             .alias('Win Replays'),
             pl.col('Merged Win Replays')
+            .sort_by('startTime', descending=False)
             .flatten()
             .drop_nulls()
-            .unique()
+            .unique(maintain_order=True)
             .alias('Merged Win Replays'),
             pl.when(pl.col(ai_win_column).ne(False))
-            .then(pl.col('id'))
+            .then(pl.col('id').sort_by('startTime', descending=False))
             .drop_nulls()
-            .unique()
+            .unique(maintain_order=True)
             .alias('Loss Replays'),
             pl.col('winners').flatten().drop_nulls().unique().alias('winners_flat'),
             pl.when(pl.col('winners').list.len() > 0)
@@ -420,6 +421,13 @@ def process_games(games, prefix):
         pastes.append(
             _str
             + f'$welcome-message Settings from http://docs.google.com/spreadsheets/d/{'1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE' if dev else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'}#gid=0&range=I{index+2}\n'
+            + (
+                f'$rename [Modded] {prefix}\n'
+                if any(
+                    v is not None and v != '' for k, v in row.items() if 'tweak' in k
+                )
+                else ''
+            )
         )
 
     logger.info('creating export df')

@@ -220,7 +220,9 @@ def main():
         .sort(by='startTime', descending=True)
         .select('id')
     )
-    to_fetch_ids = unfetched[: 2 if dev else 400]
+    to_fetch_ids = unfetched[
+        : 2 if dev else (int(os.environ.get('details_fetch_limit')))
+    ]
     if len(to_fetch_ids) == 0:
         logger.info('no new games to fetch')
         if not dev:

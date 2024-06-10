@@ -5,10 +5,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "pve_skill",
+      "name": "pve_rating",
       "type": "debugpy",
       "request": "launch",
-      "module": "PveSkill.pve_skill",
+      "module": "PveRating.pve_rating",
       "cwd": "${workspaceFolder}/lambdas",
       "console": "integratedTerminal",
       "env": {

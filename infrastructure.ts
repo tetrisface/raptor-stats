@@ -53,32 +53,64 @@ export class RaptorStatsStack extends cdk.Stack {
     )
     gcpSecret.grantRead(raptorStats)
 
-    const pveSkill = new lambda.DockerImageFunction(this, 'PveSkill', {
+    const pveRating = new lambda.DockerImageFunction(this, 'PveRating', {
       ...lambdaProps,
       ...{
         code: lambda.DockerImageCode.fromImageAsset(__dirname, {
-          cmd: ['PveSkill.lambda_handler.handler'],
+          cmd: ['PveRating.lambda_handler.handler'],
         }),
-        functionName: 'PveSkill',
+        functionName: 'PveRating',
         timeout: cdk.Duration.seconds(220),
         memorySize: 2000,
       },
     })
 
-    const eventRulePveSkill = new cdk.aws_events.Rule(
+    const eventRulePveRating = new cdk.aws_events.Rule(
       this,
-      'scheduleRulePveSkill',
+      'scheduleRulePveRating',
       {
         schedule: cdk.aws_events.Schedule.expression('cron(5,25,45 * * * ? *)'),
       },
     )
 
-    eventRulePveSkill.addTarget(
-      new cdk.aws_events_targets.LambdaFunction(pveSkill),
+    eventRulePveRating.addTarget(
+      new cdk.aws_events_targets.LambdaFunction(pveRating),
     )
-    bucket.grantRead(pveSkill)
-    pveSkill.addToRolePolicy(s3AccessPolicy)
-    gcpSecret.grantRead(pveSkill)
+    bucket.grantRead(pveRating)
+    pveRating.addToRolePolicy(s3AccessPolicy)
+    gcpSecret.grantRead(pveRating)
+
+    const exceptionTopic = new cdk.aws_sns.Topic(
+      this,
+      'lambda-exception-topic',
+      {
+        displayName: 'lambda-exception-topic',
+        topicName: 'lambda-exception-topic',
+      },
+    )
+
+    raptorStats
+      .metricErrors({
+        period: cdk.Duration.minutes(1),
+      })
+      .createAlarm(this, 'lambda-raptorstats-exception-alarm', {
+        threshold: 1,
+        evaluationPeriods: 1,
+        alarmDescription: 'Alarm if any exception is seen on RaptorStats',
+        treatMissingData: cdk.aws_cloudwatch.TreatMissingData.IGNORE,
+      })
+      .addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(exceptionTopic))
+    pveRating
+      .metricErrors({
+        period: cdk.Duration.minutes(1),
+      })
+      .createAlarm(this, 'lambda-pverating-exception-alarm', {
+        threshold: 1,
+        evaluationPeriods: 1,
+        alarmDescription: 'Alarm if any exception is seen on pveRating',
+        treatMissingData: cdk.aws_cloudwatch.TreatMissingData.IGNORE,
+      })
+      .addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(exceptionTopic))
   }
 }
 

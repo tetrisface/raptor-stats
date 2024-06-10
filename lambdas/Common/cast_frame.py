@@ -79,6 +79,7 @@ int_columns = {
     'energy_share_rework',
     'energyperpoint',
     'evocom',
+    'evocomlevelcap',
     'experimentalextraunits',
     'experimentalimprovedtransports',
     'experimentallegionfaction',
@@ -144,7 +145,7 @@ int_columns = {
     'usemexconfig',
 }
 
-float_columns = {
+decimal_columns = {
     'evocomleveluprate',
     'evocomxpmultiplier',
     'experimentalxpgain',
@@ -278,12 +279,12 @@ def cast_frame(_df):
     columns_set = set(_df.columns)
     in_df_str_cols = list(columns_set & string_columns)
     in_df_num_cols = list(columns_set & int_columns)
-    in_df_float_cols = list(columns_set & float_columns)
+    in_df_decimal_cols = list(columns_set & decimal_columns)
 
     accounted_for_columns = (
         string_columns
         | int_columns
-        | float_columns
+        | decimal_columns
         | {
             'AllyTeams',
             'AllyTeamsList',
@@ -321,6 +322,7 @@ def cast_frame(_df):
         pl.Int32,
         pl.UInt64,
         pl.Int64,
+        pl.Decimal,
         pl.Float64,
     ]
 
@@ -351,7 +353,10 @@ def cast_frame(_df):
         .cast(
             {
                 **{string_col: str for string_col in in_df_str_cols},
-                **{float_col: pl.Float64 for float_col in in_df_float_cols},
+                **{
+                    decimal_col: pl.Decimal(None, 1)
+                    for decimal_col in in_df_decimal_cols
+                },
                 'nuttyb_hp': nuttyb_hp_enum,
                 'scav_difficulty': difficulty_enum,
                 'raptor_difficulty': difficulty_enum,

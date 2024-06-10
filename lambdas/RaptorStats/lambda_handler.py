@@ -12,11 +12,13 @@ if os.environ.get('ENV', 'prod') == 'dev':
 
 
 def handler(event, context):
-    logger.debug('event: %s', event)
     try:
+        logger.info('event: %s', event)
+        os.environ['details_fetch_limit'] = event.get('details_fetch_limit', '20')
         return raptor_stats.main()
     except Exception as e:
         logger.exception(e)
+        raise e
 
 
 if __name__ == '__main__':

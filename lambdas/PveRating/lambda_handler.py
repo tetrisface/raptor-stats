@@ -1,6 +1,6 @@
 import logging
 import os
-from PveSkill import pve_skill
+from PveRating import pve_rating
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -14,9 +14,10 @@ if os.environ.get('ENV', 'prod') == 'dev':
 def handler(event, context):
     logger.debug('event: %s', event)
     try:
-        pve_skill.main()
+        pve_rating.main()
     except Exception as e:
         logger.exception(e)
+        raise e
 
 
 if __name__ == '__main__':
