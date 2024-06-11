@@ -344,6 +344,8 @@ def cast_frame(_df):
         ['veryeasy', 'easy', 'normal', 'hard', 'veryhard', 'epic']
     )
 
+    enabled_disabled_enum = pl.Enum(['disabled', 'enabled'])
+
     _df = reorder_tweaks(
         _df.join(
             nuttyb_hp_df,
@@ -360,6 +362,8 @@ def cast_frame(_df):
                 'nuttyb_hp': nuttyb_hp_enum,
                 'scav_difficulty': difficulty_enum,
                 'raptor_difficulty': difficulty_enum,
+                'assistdronesenabled': enabled_disabled_enum,
+                'commanderbuildersenabled': enabled_disabled_enum,
             },
             strict=True,
         )

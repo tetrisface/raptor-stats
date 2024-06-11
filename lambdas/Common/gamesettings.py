@@ -372,11 +372,9 @@ lower_harder = {
     # 'unit_restrictions_noair',
     #
     'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
-    'raptor_spawntimemult',  # (Time Between Waves Multiplier)
     'raptor_graceperiodmult',
     'releasecandidates',
     'scav_bosstimemult',
-    'scav_spawntimemult',
     'scav_graceperiodmult',
     'startenergy',
     'startenergystorage',
