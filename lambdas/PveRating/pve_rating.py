@@ -9,7 +9,6 @@ import gspread
 import numpy as np
 import polars as pl
 import polars.selectors as cs
-from warnings import simplefilter
 
 from Common.gamesettings import (
     gamesettings,
@@ -33,10 +32,7 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
 
-simplefilter(action='ignore', category=pl.PolarsWarning)
-
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-
 logger = logging.getLogger()
 
 gamesetting_equal_columns = set(possible_tweak_columns)
@@ -523,16 +519,23 @@ def process_games(games, prefix):
             pl.col('Setting Combinations').sum(),
             pl.col('Setting Corr.').median(),
         )
-        .join(basic_player_aggregates, on='Player', how='left', validate='1:1')
+        .join(
+            basic_player_aggregates,
+            on='Player',
+            how='left',
+            validate='1:1',
+            coalesce=True,
+        )
+        .drop(cs.ends_with('_right'))
         .drop_nulls('Player')
         .with_columns(
-            pl.col('n_games').clip(0, 20).alias('#Games'),
+            pl.when(pl.col('n_games') > 20)
+            .then(pl.lit('>20'))
+            .otherwise(pl.col('n_games').clip(0, 20))
+            .alias('#Games'),
             pl.col('Weighted Award Rate').rank().alias('Weighted Award Rate Rank'),
             pl.col('Difficulty Completion').rank().alias('Difficulty Completion Rank'),
             pl.col('n_games').clip(0, 20).rank().alias('#Games Rank'),
-            # pl.col('Difficulty Record')
-            # .rank(descending=True)
-            # .alias('Difficulty Record Rank'),
             pl.col('Setting Combinations').rank().alias('Setting Combinations Rank'),
             pl.col('Win Rate').rank().alias('Win Rate Rank'),
             pl.col('Setting Corr.').rank(descending=True).alias('Setting Corr. Rank'),
@@ -621,8 +624,9 @@ def update_sheets(df, rating_number_df, prefix):
     )
     int_cols = [
         index for index, x in enumerate(rating_number_df.columns) if 'Rank' in x
-    ] + [rating_number_df.columns.index(x) for x in ['Setting Combinations', '#Games']]
+    ] + [rating_number_df.columns.index(x) for x in ['Setting Combinations']]
     pve_rating_col_index = rating_number_df.columns.index('PVE Rating')
+    n_games_col_index = rating_number_df.columns.index('#Games')
 
     spreadsheet.batch_update(
         {
@@ -633,6 +637,21 @@ def update_sheets(df, rating_number_df, prefix):
                             'title': f'{'[DEV] ' if dev else ''}PVE Rating, updated: {datetime.datetime.now(datetime.UTC):%Y-%m-%d %H:%M} UTC',
                         },
                         'fields': 'title',
+                    }
+                },
+                {
+                    'repeatCell': {
+                        'range': {
+                            'sheetId': sheet_id,
+                            'startColumnIndex': n_games_col_index,
+                            'endColumnIndex': n_games_col_index + 1,
+                        },
+                        'cell': {
+                            'userEnteredFormat': {
+                                'horizontalAlignment': 'RIGHT',
+                            }
+                        },
+                        'fields': 'userEnteredFormat.horizontalAlignment',
                     }
                 },
                 *[
@@ -646,12 +665,12 @@ def update_sheets(df, rating_number_df, prefix):
                             'cell': {
                                 'userEnteredFormat': {
                                     'numberFormat': {
-                                        'type': 'PERCENT',
+                                        'type': 'PERCENT',  # https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/cells#numberformattype
                                         'pattern': '#%;#%;',  # https://developers.google.com/sheets/api/guides/formats#number_format_tokens
                                     }
                                 }
                             },
-                            'fields': 'userEnteredFormat',
+                            'fields': 'userEnteredFormat.numberFormat',
                         }
                     }
                     for col_index in percent_int_cols
@@ -672,7 +691,7 @@ def update_sheets(df, rating_number_df, prefix):
                                     }
                                 }
                             },
-                            'fields': 'userEnteredFormat',
+                            'fields': 'userEnteredFormat.numberFormat',
                         }
                     }
                     for col_index in [
@@ -696,7 +715,7 @@ def update_sheets(df, rating_number_df, prefix):
                                     }
                                 }
                             },
-                            'fields': 'userEnteredFormat',
+                            'fields': 'userEnteredFormat.numberFormat',
                         }
                     }
                     for col_index in int_cols

@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 import time
 
 import gspread
@@ -29,6 +30,7 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
 
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -177,9 +179,9 @@ def main():
 
     replay_details_cache = get_df(replay_details_file_name)
 
-    games = games.join(replay_details_cache, how='left', on='id').drop(
-        cs.ends_with('_right')
-    )
+    games = games.join(
+        replay_details_cache, how='left', on='id', validate='1:1', coalesce=True
+    ).drop(cs.ends_with('_right'))
     del replay_details_cache
 
     previousPlayerWinStartTime = (

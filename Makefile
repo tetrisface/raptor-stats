@@ -25,6 +25,9 @@ run:
 run-dev:
 	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m PveRating.pve_rating)
 
+run-fetch-dev:
+	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m RaptorStats.raptor_stats)
+
 install:
 	cdk deploy
 
@@ -50,3 +53,7 @@ download:
 backup:
 	aws s3 cp s3://raptor-stats-parquet/replays.parquet s3://raptor-stats-parquet/replays.parquet.backup.`date +%d`
 	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet.backup.`date +%d`
+
+update:
+	bunx npm-check-updates -i
+	pipenv update
