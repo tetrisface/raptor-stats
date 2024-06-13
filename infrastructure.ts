@@ -1,31 +1,57 @@
-import * as cdk from 'aws-cdk-lib'
+import * as assert from 'assert'
+import {
+  App,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  StackProps,
+  aws_cloudwatch,
+  aws_cloudwatch_actions,
+  aws_events,
+  aws_events_targets,
+  aws_iam,
+  aws_lambda,
+  aws_s3,
+  aws_secretsmanager,
+  aws_sns,
+} from 'aws-cdk-lib'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import { Construct } from 'constructs'
 
-export class RaptorStatsStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+export class RaptorStatsStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props)
 
-    const bucket = new cdk.aws_s3.Bucket(this, 'raptor-stats-parquet', {
+    const bucket = new aws_s3.Bucket(this, 'raptor-stats-parquet', {
       bucketName: 'raptor-stats-parquet',
-      blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
-      accessControl: cdk.aws_s3.BucketAccessControl.PRIVATE,
-      removalPolicy: cdk.RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
-      encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
+      accessControl: aws_s3.BucketAccessControl.PRIVATE,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+      encryption: aws_s3.BucketEncryption.S3_MANAGED,
       versioned: false,
     })
-    const s3AccessPolicy = new cdk.aws_iam.PolicyStatement({
+    const s3AccessPolicy = new aws_iam.PolicyStatement({
       actions: ['s3:*'],
       resources: [bucket.bucketArn + '/*'],
     })
-    const gcpSecret = cdk.aws_secretsmanager.Secret.fromSecretCompleteArn(
+    const gcpSecret = aws_secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'raptor-gcp',
       'arn:aws:secretsmanager:eu-north-1:190920611368:secret:raptor-gcp-x1EjkW',
     )
-    const eventRuleRaptorStats = new cdk.aws_events.Rule(this, 'scheduleRule', {
-      schedule: cdk.aws_events.Schedule.expression('cron(*/20 * * * ? *)'),
+
+    const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
+      schedule: aws_events.Schedule.expression('cron(0 */2 * * ? *)'),
     })
+    const eventRulePveRating = new aws_events.Rule(
+      this,
+      'scheduleRulePveRating',
+      {
+        schedule: aws_events.Schedule.expression('cron(8 */2 * * ? *)'),
+      },
+    )
+
+    assert(typeof process.env.DISCORD_USERNAME === 'string')
 
     const lambdaProps = {
       code: lambda.DockerImageCode.fromImageAsset(__dirname, {
@@ -34,12 +60,13 @@ export class RaptorStatsStack extends cdk.Stack {
       functionName: 'RaptorStats',
       environment: {
         BUCKET_NAME: bucket.bucketName,
+        DISCORD_USERNAME: process.env.DISCORD_USERNAME,
       },
-      timeout: cdk.Duration.seconds(500),
+      timeout: Duration.seconds(500),
       memorySize: 1300,
-      architecture: cdk.aws_lambda.Architecture.ARM_64,
+      architecture: aws_lambda.Architecture.ARM_64,
       retryAttempts: 0,
-      maxEventAge: cdk.Duration.minutes(5),
+      maxEventAge: Duration.minutes(5),
     }
     const raptorStats = new lambda.DockerImageFunction(
       this,
@@ -49,7 +76,7 @@ export class RaptorStatsStack extends cdk.Stack {
     bucket.grantReadWrite(raptorStats)
     raptorStats.addToRolePolicy(s3AccessPolicy)
     eventRuleRaptorStats.addTarget(
-      new cdk.aws_events_targets.LambdaFunction(raptorStats),
+      new aws_events_targets.LambdaFunction(raptorStats),
     )
     gcpSecret.grantRead(raptorStats)
 
@@ -60,61 +87,49 @@ export class RaptorStatsStack extends cdk.Stack {
           cmd: ['PveRating.lambda_handler.handler'],
         }),
         functionName: 'PveRating',
-        timeout: cdk.Duration.seconds(220),
-        memorySize: 2000,
+        timeout: Duration.seconds(444),
+        memorySize: 2400,
       },
     })
 
-    const eventRulePveRating = new cdk.aws_events.Rule(
-      this,
-      'scheduleRulePveRating',
-      {
-        schedule: cdk.aws_events.Schedule.expression('cron(5,25,45 * * * ? *)'),
-      },
-    )
-
     eventRulePveRating.addTarget(
-      new cdk.aws_events_targets.LambdaFunction(pveRating),
+      new aws_events_targets.LambdaFunction(pveRating),
     )
     bucket.grantRead(pveRating)
     pveRating.addToRolePolicy(s3AccessPolicy)
     gcpSecret.grantRead(pveRating)
 
-    const exceptionTopic = new cdk.aws_sns.Topic(
-      this,
-      'lambda-exception-topic',
-      {
-        displayName: 'lambda-exception-topic',
-        topicName: 'lambda-exception-topic',
-      },
-    )
+    const exceptionTopic = new aws_sns.Topic(this, 'lambda-exception-topic', {
+      displayName: 'lambda-exception-topic',
+      topicName: 'lambda-exception-topic',
+    })
 
     raptorStats
       .metricErrors({
-        period: cdk.Duration.minutes(1),
+        period: Duration.minutes(1),
       })
       .createAlarm(this, 'lambda-raptorstats-exception-alarm', {
         threshold: 1,
         evaluationPeriods: 1,
         alarmDescription: 'Alarm if any exception is seen on RaptorStats',
-        treatMissingData: cdk.aws_cloudwatch.TreatMissingData.IGNORE,
+        treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
       })
-      .addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(exceptionTopic))
+      .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
     pveRating
       .metricErrors({
-        period: cdk.Duration.minutes(1),
+        period: Duration.minutes(1),
       })
       .createAlarm(this, 'lambda-pverating-exception-alarm', {
         threshold: 1,
         evaluationPeriods: 1,
         alarmDescription: 'Alarm if any exception is seen on pveRating',
-        treatMissingData: cdk.aws_cloudwatch.TreatMissingData.IGNORE,
+        treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
       })
-      .addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(exceptionTopic))
+      .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
   }
 }
 
-const app = new cdk.App()
+const app = new App()
 new RaptorStatsStack(app, 'RaptorStatsStack', {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,

@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 import datetime
+import random
 import re
 import logging
 import sys
@@ -11,10 +13,9 @@ import polars as pl
 import polars.selectors as cs
 
 from Common.gamesettings import (
-    gamesettings,
+    gamesetting_equal_columns,
     lower_harder,
     higher_harder,
-    possible_tweak_columns,
 )
 from Common.common import (
     get_df,
@@ -35,14 +36,6 @@ if dev:
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger()
 
-gamesetting_equal_columns = set(possible_tweak_columns)
-for gamesetting in gamesettings.values():
-    gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
-
-gamesetting_equal_columns = (
-    gamesetting_equal_columns - set(lower_harder) - set(higher_harder)
-)
-
 teammates_completion_fit_input, teammates_completion_fit_output = zip(
     *[
         (1, 1),
@@ -58,9 +51,56 @@ teammates_coef_a, teammates_coef_b, teammates_coef_c = np.linalg.lstsq(
 )[0]
 
 
+@dataclass
+class PveRatingColumnNames:
+    MapName: str = 'Map Name'  # NOSONAR
+    MergedWinReplays: str = 'Merged Win Replays'  # NOSONAR
+    n_games: str = 'n_games'  # NOSONAR
+    WinRate: str = 'Win Rate'  # NOSONAR
+    AwardRate: str = 'Award Rate'  # NOSONAR
+    WeightedAwardRate: str = 'Weighted Award Rate'  # NOSONAR
+    MergedWinReplays: str = 'Merged Win Replays'  # NOSONAR
+    SuccessRate: str = 'Success Rate'  # NOSONAR
+    winners: str = 'winners'  # NOSONAR
+    nWinners: str = '#Winners'  # NOSONAR
+    Players: str = 'Players'  # NOSONAR
+    nPlayers: str = '#Players'  # NOSONAR
+    WinReplays: str = 'Win Replays'  # NOSONAR
+    MergedWinReplays: str = 'Merged Win Replays'  # NOSONAR
+    LossReplays: str = 'Loss Replays'  # NOSONAR
+    winners_flat: str = 'winners_flat'  # NOSONAR
+    games_winners: str = 'games_winners'  # NOSONAR
+    winners_count: str = 'winners_count'  # NOSONAR
+    players_count: str = 'players_count'  # NOSONAR
+    SettingCorr: str = 'Setting Corr.'  # NOSONAR
+    teammates_weighted_success_rate: str = 'teammates_weighted_success_rate'  # NOSONAR
+    Winners: str = 'Winners'  # NOSONAR
+    CopyPaste: str = 'Copy Paste'  # NOSONAR
+    SettingCombinations: str = 'Setting Combinations'  # NOSONAR
+    teammates_completion: str = 'teammates_completion'  # NOSONAR
+    DifficultyRecord: str = 'Difficulty Record'  # NOSONAR
+    DifficultyCompletion: str = 'Difficulty Completion'  # NOSONAR
+    nGames: str = '#Games'  # NOSONAR
+    WeightedAwardRateRank: str = 'Weighted Award Rate Rank'  # NOSONAR
+    DifficultyCompletionRank: str = 'Difficulty Completion Rank'  # NOSONAR
+    nGamesRank: str = '#Games Rank'  # NOSONAR
+    SettingCombinationsRank: str = 'Setting Combinations Rank'  # NOSONAR
+    WinRateRank: str = 'Win Rate Rank'  # NOSONAR
+    SettingCorrRank: str = 'Setting Corr. Rank'  # NOSONAR
+    CombinedRank: str = 'Combined Rank'  # NOSONAR
+    PVERating: str = 'PVE Rating'  # NOSONAR
+
+
+col = PveRatingColumnNames()
+
+
 def main():
     _games = add_computed_cols(cast_frame(get_df(replay_details_file_name))).filter(
-        ~pl.col('is_player_ai_mixed') & pl.col('has_player_handicap').eq(False)
+        ~pl.col('is_player_ai_mixed')
+        & pl.col('has_player_handicap').eq(False)
+        & pl.col('startTime')
+        .dt.datetime()
+        .gt(datetime.datetime.now() - datetime.timedelta(days=120))
     )
 
     process_games(_games.filter(pl.col('raptors').eq(True)), 'Raptors')
@@ -91,6 +131,15 @@ def process_games(games, prefix):
         | ai_gamesetting_lower_harder
         | ai_gamesetting_higher_harder
     )
+
+    null_columns_df = (
+        games[list(set(ai_gamesetting_all_columns + ['Map']) - {'nuttyb_hp'})]
+        .null_count()
+        .transpose(include_header=True, header_name='setting', column_names=['value'])
+        .filter(pl.col('value') > 0)
+    )
+    if len(null_columns_df) > 0:
+        logger.warning(f'found null columns {null_columns_df}')
 
     games = games.with_columns(
         pl.col('Map').struct.field('scriptName').alias('Map Name'),
@@ -217,11 +266,17 @@ def process_games(games, prefix):
         easier_games = games.filter(
             pl.col('id').ne(game['id']),
             *[
-                pl.col(x).eq(game[x])
+                (pl.col(x).is_not_null() & pl.col(x).eq(game[x]))
                 for x in (_ai_gamesetting_equal_columns | {'Map Name'})
             ],
-            *[pl.col(x).le(game[x]) for x in _ai_gamesetting_higher_harder],
-            *[pl.col(x).ge(game[x]) for x in _ai_gamesetting_lower_harder],
+            *[
+                (pl.col(x).is_not_null() & pl.col(x).le(game[x]))
+                for x in _ai_gamesetting_higher_harder
+            ],
+            *[
+                (pl.col(x).is_not_null() & pl.col(x).ge(game[x]))
+                for x in _ai_gamesetting_lower_harder
+            ],
             pl.when(pl.col('startTime').dt.date().gt(datetime.date(2024, 6, 5)))
             .then(pl.col(ai_spawntime).le(game[ai_spawntime]))
             .otherwise(pl.col(ai_spawntime).ge(game[ai_spawntime])),
@@ -408,15 +463,21 @@ def process_games(games, prefix):
     logger.info('creating pastes')
     pastes = []
     for index, row in enumerate(group_df.iter_rows(named=True)):
-        _str = '\n!preset coop\n' + (
+        _str = '\n!preset coop\n!draft_mode disabled\n' + (
             f'!map {row["Map Name"]}\n' if row['Map Name'] else ''
         )
 
         for key, value in row.items():
-            if key not in ai_gamesetting_all_columns or value is None or value == '':
+            value = str(value).strip()
+            if (
+                key == 'nuttyb_hp'
+                or key not in ai_gamesetting_all_columns
+                or value is None
+                or value == ''
+            ):
                 continue
 
-            value = re.sub('\\.0\\s*$', '', str(value))
+            value = re.sub('\\.0\\s*$', '', value)
 
             if ('multiplier_' in key and value == '1') or (
                 'unit_restrictions_' in key and value == '0'
@@ -428,9 +489,19 @@ def process_games(games, prefix):
             else:
                 _str += f'!{key} {re.sub("\\.0\\s*$", "", str(value))}\n'
 
+        sheet_id = (
+            '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
+            if dev
+            else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
+        )
+        nuttyb_link_str = (
+            ' and https://docs.google.com/document/d/1ycQV-T__ilKeTKxbCyGjlTKw_6nmDSFdJo-kPmPrjIs'
+            if row['nuttyb_hp'] is not None
+            else ''
+        )
         pastes.append(
             _str
-            + f'$welcome-message Settings from http://docs.google.com/spreadsheets/d/{'1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE' if dev else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'}#gid=0&range=I{index+2}\n'
+            + f'$welcome-message Settings from http://docs.google.com/spreadsheets/d/{sheet_id}#gid=0&range=I{index+2}{nuttyb_link_str}\n'
             + (
                 f'$rename [Modded] {prefix}\n'
                 if any(
@@ -445,28 +516,28 @@ def process_games(games, prefix):
         group_df.with_columns(
             pl.col('winners')
             .map_elements(
-                lambda col: ', '.join(col.to_list()),
+                lambda _col: ', '.join(_col.to_list()),
                 skip_nulls=True,
                 return_dtype=pl.String,
             )
             .alias('Winners'),
             pl.col('Players').map_elements(
-                lambda col: ', '.join(col.to_list()),
+                lambda _col: ', '.join(_col.to_list()),
                 skip_nulls=True,
                 return_dtype=pl.String,
             ),
             pl.col('Win Replays').map_elements(
-                lambda col: ', '.join(col.to_list()),
+                lambda _col: ', '.join(_col.to_list()),
                 skip_nulls=True,
                 return_dtype=pl.String,
             ),
             pl.col('Merged Win Replays').map_elements(
-                lambda col: ', '.join(col.to_list()),
+                lambda _col: ', '.join(_col.to_list()),
                 skip_nulls=True,
                 return_dtype=pl.String,
             ),
             pl.col('Loss Replays').map_elements(
-                lambda col: ', '.join(col.to_list()),
+                lambda _col: ', '.join(_col.to_list()),
                 skip_nulls=True,
                 return_dtype=pl.String,
             ),
@@ -487,6 +558,7 @@ def process_games(games, prefix):
             + ['Map Name']
             + list(ai_gamesetting_all_columns)
         )
+        .fill_null(' ')
         .rename({'Map Name': 'Map'})
         .sort(by='Success Rate', descending=False)
     )
@@ -508,7 +580,8 @@ def process_games(games, prefix):
             .map_elements(
                 lambda x: x['teammates_weighted_success_rate'][x['Player']]
                 if x['Player'] in x['teammates_weighted_success_rate']
-                else 1.0
+                else 1.0,
+                return_dtype=pl.Float64,
             )
             .alias('teammates_completion'),
         )
@@ -582,15 +655,24 @@ def update_sheets(df, rating_number_df, prefix):
         gc = gspread.service_account()
         spreadsheet = gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
     else:
-        gc = gspread.service_account_from_dict(json.loads(get_secret()))
-        spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
+        try:
+            gc = gspread.service_account_from_dict(json.loads(get_secret()))
+            spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
+        except gspread.exceptions.APIError as e:
+            logger.exception(e)
+            logger.info('failed connection to google, stopping')
+            return 'failed'
 
     worksheet_gamesettings = spreadsheet.worksheet(prefix + ' Gamesettings')
-    # worksheet_gamesettings.clear()
-    # worksheet_gamesettings.update(
-    #     values=[['UPDATE IN PROGRESS']],
-    #     value_input_option=gspread.utils.ValueInputOption.user_entered,
-    # )
+
+    if not dev and random.randint(1, 10) % 10 == 0:
+        logger.info('clearing gamesettings sheet')
+        worksheet_gamesettings.clear()
+        worksheet_gamesettings.update(
+            values=[['UPDATE IN PROGRESS']],
+            value_input_option=gspread.utils.ValueInputOption.user_entered,
+        )
+
     logger.info(f'pushing {len(df)} {prefix} gamesettings')
     worksheet_gamesettings.update(
         values=[df.columns] + df.rows(),
@@ -670,7 +752,7 @@ def update_sheets(df, rating_number_df, prefix):
                                     }
                                 }
                             },
-                            'fields': 'userEnteredFormat.numberFormat',
+                            'fields': 'userEnteredFormat.numberFormat',  # NOSONAR
                         }
                     }
                     for col_index in percent_int_cols

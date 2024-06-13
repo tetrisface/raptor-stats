@@ -269,7 +269,9 @@ def add_computed_cols(_df):
     _df = _df.filter(
         pl.col('AllyTeams').is_not_null() & pl.col('awards').is_not_null()
     ).with_columns(
-        pl.struct('AllyTeams', 'awards').map_elements(awards).alias('damage_eco_award')
+        pl.struct('AllyTeams', 'awards')
+        .map_elements(awards, return_dtype=pl.Struct)
+        .alias('damage_eco_award')
     )
 
     return _df
@@ -351,14 +353,9 @@ def cast_frame(_df):
             nuttyb_hp_df,
             on='tweakdefs1',
             how='left',
-        )
-        .cast(
+        ).cast(
             {
                 **{string_col: str for string_col in in_df_str_cols},
-                **{
-                    decimal_col: pl.Decimal(None, 1)
-                    for decimal_col in in_df_decimal_cols
-                },
                 'nuttyb_hp': nuttyb_hp_enum,
                 'scav_difficulty': difficulty_enum,
                 'raptor_difficulty': difficulty_enum,
@@ -367,39 +364,54 @@ def cast_frame(_df):
             },
             strict=True,
         )
-        .with_columns(
-            pl.col(in_df_str_cols).fill_null(''),
-            pl.col('evocomleveluprate').fill_null(5),
-            *[pl.col(x).fill_null(0) for x in int_columns if 'unit_restrictions_' in x],
-            *[
-                pl.col(x).fill_null(0)
-                for x in [
-                    'april1',
-                    'april1extra',
-                    'easter_egg_hunt',
-                    'easteregghunt',
-                    'evocom',
-                    'forceallunits',
-                ]
-                if x in _df.columns
-            ],
-            *[
-                pl.col(x).fill_null(1)
-                for x in [
-                    'evocomxpmultiplier',
-                    'scav_graceperiodmult',
-                ]
-                if x in _df.columns
-            ],
-            has_player_handicap=pl.col('AllyTeams').map_elements(
-                has_player_handicap, return_dtype=pl.Boolean
-            ),
-            barbarian=(
-                pl.col('AllyTeamsList')
-                if 'AllyTeamsList' in _df.columns
-                else pl.col('AllyTeams')
-            ).map_elements(has_barbarian, return_dtype=pl.Boolean),
-        )
+    )
+
+    for col in in_df_decimal_cols:
+        for decimal_type in [pl.Decimal(None, 1), pl.Float64]:
+            try:
+                _df = _df.cast(
+                    {col: decimal_type},
+                    strict=True,
+                )
+            except Exception as e:
+                logger.exception(e)
+                logger.info(
+                    f'Could not cast decimal column "{col}" to "{decimal_type}"'
+                )
+    _df = _df.with_columns(
+        pl.col(in_df_str_cols).fill_null(''),
+        pl.col('evocomleveluprate').fill_null(5)
+        if 'evocomleveluprate' in _df.columns
+        else None,
+        *[pl.col(x).fill_null(0) for x in int_columns if 'unit_restrictions_' in x],
+        *[
+            pl.col(x).fill_null(0)
+            for x in [
+                'april1',
+                'april1extra',
+                'easter_egg_hunt',
+                'easteregghunt',
+                'evocom',
+                'forceallunits',
+            ]
+            if x in _df.columns
+        ],
+        *[
+            pl.col(x).fill_null(1)
+            for x in [
+                'evocomxpmultiplier',
+                'scav_graceperiodmult',
+            ]
+            if x in _df.columns
+        ],
+        has_player_handicap=pl.col('AllyTeams').map_elements(
+            has_player_handicap, return_dtype=pl.Boolean
+        ),
+        barbarian=(
+            pl.col('AllyTeamsList')
+            if 'AllyTeamsList' in _df.columns
+            else pl.col('AllyTeams')
+        ).map_elements(has_barbarian, return_dtype=pl.Boolean),
     )
     # _df[[s.name for s in _df if s.null_count() > 0] + ['startTime']].sort(
     #     'startTime'

@@ -119,6 +119,8 @@ defaults = {
     'assistdronesbuildpowermultiplier': 1,
     'commanderbuildersrange': 1000,
     'commanderbuildersbuildpower': 400,
+    # Experimental
+    'experimentalshields': 'unchanged',
 }
 
 rush_148 = {
@@ -141,6 +143,8 @@ rush_148 = {
     'startenergy': 10000,
     'startmetalstorage': 10000,
     'startenergystorage': 10000,
+    #
+    'experimentalshields': 'bounceeverything',
     #
     # Any other values are harder or very similar for these settings:
     # 'maxunits': 10000,
@@ -386,4 +390,12 @@ possible_tweak_columns = (
     + [f'tweakunits{i}' for i in range(1, 10)]
     + ['tweakdefs']
     + [f'tweakdefs{i}' for i in range(1, 10)]
+)
+
+gamesetting_equal_columns = set(possible_tweak_columns)
+for gamesetting in gamesettings.values():
+    gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
+
+gamesetting_equal_columns = (
+    gamesetting_equal_columns - set(lower_harder) - set(higher_harder)
 )

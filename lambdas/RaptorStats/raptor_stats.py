@@ -24,6 +24,7 @@ from Common.gamesettings import (
     nutty_b_main,
     possible_tweak_columns,
     various,
+    gamesetting_equal_columns,
 )
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
@@ -82,7 +83,10 @@ def main():
         if page > 1:
             time.sleep(0.4)
         logger.info(f'fetching {apiUrl}')
-        replays_json = requests.get(apiUrl, headers={'User-Agent': 'tetrisface'}).json()
+        replays_json = requests.get(
+            apiUrl,
+            headers={'User-Agent': os.environ['DISCORD_USERNAME']},
+        ).json()
 
         data = replays_json['data']
 
@@ -186,7 +190,8 @@ def main():
 
     previousPlayerWinStartTime = (
         games.filter(
-            pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+            (pl.col('raptors').eq(True) & pl.col('raptors_win').eq(False))
+            | (pl.col('scavengers').eq(True) & pl.col('scavengers_win').eq(False))
         )
         .select(pl.col('startTime'))
         .max()
@@ -201,7 +206,9 @@ def main():
             time.sleep(0.4)
         if _replay_id is not None:
             url = f'https://api.bar-rts.com/replays/{_replay_id}'
-            response = requests.get(url, headers={'User-Agent': 'tetrisface'})
+            response = requests.get(
+                url, headers={'User-Agent': os.environ['DISCORD_USERNAME']}
+            )
             if response.status_code == 200:
                 response_json = response.json()
                 replay_details = response_json.get('gameSettings')
@@ -252,9 +259,21 @@ def main():
             f'failed to fetch {len(games.filter(pl.col('fetch_success') == False))} games'
         )
 
+    null_columns_df = (
+        games[list((set(gamesetting_equal_columns) | {'Map'}) - {'nuttyb_hp'})]
+        .null_count()
+        .transpose(include_header=True, header_name='setting', column_names=['value'])
+        .filter(pl.col('value') > 0)
+    )
+    if len(null_columns_df) > 0:
+        logger.warning(f'found null columns {null_columns_df}')
+
     # refetch game details
     # games = games.update(
     #     games.filter(
+    #         # found nulls refetch
+    #         pl.any_horizontal(pl.col(null_columns_df['setting'].to_list()).is_null())
+    #         # date refetch etc
     #         # (pl.col('startTime').cast(pl.Date) > datetime.date(2024, 4, 26))
     #         # & pl.col('evocom').is_null()
     #         # pl.col('Map').struct.field('scriptName').is_null()
@@ -271,12 +290,19 @@ def main():
     )
 
     # stop without any new wins
-    newMaxStartTime, newMaxEndTime = games.select(
-        pl.col('startTime'),
-        ((pl.col('startTime') + pl.col('durationMs') * 1000000) / 1000)
-        .cast(pl.Datetime)
-        .alias('newEndTime'),
-    ).max()
+    newMaxStartTime, newMaxEndTime = (
+        games.filter(
+            (pl.col('raptors').eq(True) & pl.col('raptors_win').eq(False))
+            | (pl.col('scavengers').eq(True) & pl.col('scavengers_win').eq(False))
+        )
+        .select(
+            pl.col('startTime'),
+            ((pl.col('startTime') + pl.col('durationMs') * 1000000) / 1000)
+            .cast(pl.Datetime)
+            .alias('newEndTime'),
+        )
+        .max()
+    )
     tz_stockholm = pytz.timezone('Europe/Stockholm')
     previousStockholm = previousPlayerWinStartTime.replace(tzinfo=pytz.utc).astimezone(
         tz_stockholm
@@ -635,8 +661,13 @@ def main():
         gc = gspread.service_account()
         spreadsheet = gc.open_by_key('1w8Ng9GGUo6DU0rBFRYRnC_JxK8nHTSSjf1Nbq1e-3bc')
     else:
-        gc = gspread.service_account_from_dict(json.loads(get_secret()))
-        spreadsheet = gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
+        try:
+            gc = gspread.service_account_from_dict(json.loads(get_secret()))
+            spreadsheet = gc.open_by_key('1oI7EJIUiwLLXDMBgky2BN8gM6eaQRb9poWGiP2IKot0')
+        except gspread.exceptions.APIError as e:
+            logger.exception(e)
+            logger.info('failed connection to google, stopping')
+            return 'failed'
 
     update_sheet(spreadsheet, grouped(players), ' All', newMaxEndTime)
     players = players.filter(pl.col('Difficulty') != 'Mixed AIs')

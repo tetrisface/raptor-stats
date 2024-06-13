@@ -29,6 +29,7 @@ run-fetch-dev:
 	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m RaptorStats.raptor_stats)
 
 install:
+	rm -rf cdk.out/*
 	cdk deploy
 
 deploy: install
