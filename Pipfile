@@ -18,6 +18,7 @@ tqdm = "*"
 plotly = "*"
 nbformat = "*"
 ipykernel = "*"
+orjson = "*"
 
 [dev-packages]
 guppy3 = "*"

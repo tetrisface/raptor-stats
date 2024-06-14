@@ -105,7 +105,7 @@ defaults = {
     'multiplier_energycost': 1,
     'multiplier_energyproduction': 1,
     'multiplier_losrange': 1,
-    'multiplier_maxdamage': 1,
+    'multiplier_maxdamage': 1,  # deprecated/removed ig
     'multiplier_maxvelocity': 1,
     'multiplier_metalcost': 1,
     'multiplier_metalextraction': 1,
@@ -190,7 +190,7 @@ zerg_149 = {
         'raptor_queentimemult': 1.4,
         'raptor_spawncountmult': 3,
         'raptor_firstwavesboost': 7,
-        'raptor_spawntimemult': 0.6,
+        'raptor_spawntimemult': 1.2,
         'raptor_graceperiodmult': 1.5,
     },
 }
@@ -199,7 +199,7 @@ _0_grace_zerg_148_149 = {
     **_0_grace_149,
     **{
         'raptor_firstwavesboost': 7,
-        'raptor_spawntimemult': 0.6,
+        'raptor_spawntimemult': 1.2,
     },
 }
 
@@ -227,7 +227,7 @@ gauntlet_148 = {
 zerg_148 = {
     **rush_148,
     **{
-        'raptor_spawntimemult': 0.5,
+        'raptor_spawntimemult': 2,
         'raptor_graceperiodmult': 1.5,
     },
 }
@@ -335,8 +335,10 @@ higher_harder = {
     'raptor_firstwavesboost',
     # 'raptor_raptorstart', # uncertain
     'raptor_spawncountmult',
+    'raptor_spawntimemult',
     # 'ruins_only_t1',
     'scav_difficulty',
+    'scav_spawntimemult',
     'unit_restrictions_noextractors',
     'unit_restrictions_notech2',
     'unit_restrictions_notech3',

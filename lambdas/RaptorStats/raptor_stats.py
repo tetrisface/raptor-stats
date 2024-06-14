@@ -215,6 +215,7 @@ def main():
                 replay_details['awards'] = response_json.get('awards')
                 replay_details['AllyTeams'] = response_json.get('AllyTeams')
                 replay_details['Map'] = response_json.get('Map')
+                replay_details['startTime'] = response_json.get('startTime')
                 replay_details['id'] = _replay_id
                 replay_details['fetch_success'] = True
                 return replay_details
@@ -250,7 +251,11 @@ def main():
                 pl.lit(None).alias(x)
                 for x in set(fetched[0].keys()) - set(games.columns)
             ]
-        ).update(cast_frame(pl.DataFrame(fetched, strict=False)), how='left', on='id')
+        ).update(
+            cast_frame(pl.DataFrame(fetched, strict=False)).drop('startTime'),
+            how='left',
+            on='id',
+        )
 
     del to_fetch_ids, unfetched
 
@@ -260,7 +265,12 @@ def main():
         )
 
     null_columns_df = (
-        games[list((set(gamesetting_equal_columns) | {'Map'}) - {'nuttyb_hp'})]
+        games[
+            list(
+                (set(gamesetting_equal_columns) | {'Map'})
+                - {'nuttyb_hp', 'multiplier_maxdamage'}
+            )
+        ]
         .null_count()
         .transpose(include_header=True, header_name='setting', column_names=['value'])
         .filter(pl.col('value') > 0)

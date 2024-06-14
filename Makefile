@@ -30,7 +30,7 @@ run-fetch-dev:
 
 install:
 	rm -rf cdk.out/*
-	cdk deploy
+	cdk deploy --all
 
 deploy: install
 

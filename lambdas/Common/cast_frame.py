@@ -1,6 +1,8 @@
+import datetime
 import logging
 import os
 
+import numpy as np
 import polars as pl
 from Common.gamesettings import nuttyb_hp_multiplier, possible_tweak_columns
 
@@ -115,7 +117,6 @@ int_columns = {
     'ruins_only_t1',
     'scav_endless',
     'scav_spawncountmult',
-    'scav_spawntimemult',
     'scoremode_chess_adduptime',
     'scoremode_chess_spawnsperphase',
     'scoremode_chess_unbalanced',
@@ -169,11 +170,14 @@ decimal_columns = {
     'raptor_firstwavesboost',
     'raptor_graceperiodmult',
     'raptor_queentimemult',
-    'raptor_spawntimemult',
     'scav_bosstimemult',
     'scav_graceperiodmult',
-    'scav_spawntimemult',
     'unbacomleveluprate',
+}
+
+float_columns = {
+    'raptor_spawntimemult',
+    'scav_spawntimemult',
 }
 
 logger = logging.getLogger()
@@ -282,11 +286,13 @@ def cast_frame(_df):
     in_df_str_cols = list(columns_set & string_columns)
     in_df_num_cols = list(columns_set & int_columns)
     in_df_decimal_cols = list(columns_set & decimal_columns)
+    in_df_float_cols = list(columns_set & float_columns)
 
     accounted_for_columns = (
         string_columns
         | int_columns
         | decimal_columns
+        | float_columns
         | {
             'AllyTeams',
             'AllyTeamsList',
@@ -342,6 +348,24 @@ def cast_frame(_df):
             except Exception as e:
                 logger.debug(e)
 
+    _df = _df.with_columns(
+        pl.col('startTime').str.to_datetime(
+            '%+', time_unit='ns', time_zone='UTC', strict=True, exact=True
+        )
+    )
+    for col in in_df_float_cols:
+        if '_spawntimemult' in col:
+            _df = _df.cast(
+                {col: pl.Float64}, strict=True
+            ).with_columns(
+                pl.when(
+                    pl.col('startTime').dt.date().gt(datetime.date(2024, 6, 5))
+                )  # multiplier was inverted https://github.com/beyond-all-reason/Beyond-All-Reason/pull/3107/files
+                .then(pl.col(col).fill_null(1.0))
+                .otherwise(1 / pl.col(col).fill_null(1.0))
+                .replace(np.inf, 1.0)
+            )
+
     difficulty_enum = pl.Enum(
         ['veryeasy', 'easy', 'normal', 'hard', 'veryhard', 'epic']
     )
@@ -380,10 +404,14 @@ def cast_frame(_df):
                 )
     _df = _df.with_columns(
         pl.col(in_df_str_cols).fill_null(''),
-        pl.col('evocomleveluprate').fill_null(5)
+        pl.col('evocomleveluprate').fill_null(5).alias('evocomleveluprate')
         if 'evocomleveluprate' in _df.columns
         else None,
-        *[pl.col(x).fill_null(0) for x in int_columns if 'unit_restrictions_' in x],
+        *[
+            pl.col(x).fill_null(0)
+            for x in int_columns
+            if 'unit_restrictions_' in x and x in _df.columns
+        ],
         *[
             pl.col(x).fill_null(0)
             for x in [

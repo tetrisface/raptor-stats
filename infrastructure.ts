@@ -17,6 +17,7 @@ import {
 } from 'aws-cdk-lib'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import { Construct } from 'constructs'
+import bucketName, { WebStack } from './infrastructure/web'
 
 export class RaptorStatsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -30,10 +31,18 @@ export class RaptorStatsStack extends Stack {
       encryption: aws_s3.BucketEncryption.S3_MANAGED,
       versioned: false,
     })
+
+    const webBucket = aws_s3.Bucket.fromBucketName(
+      this,
+      'ImportedBucket',
+      bucketName,
+    )
+
     const s3AccessPolicy = new aws_iam.PolicyStatement({
       actions: ['s3:*'],
       resources: [bucket.bucketArn + '/*'],
     })
+
     const gcpSecret = aws_secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'raptor-gcp',
@@ -96,6 +105,7 @@ export class RaptorStatsStack extends Stack {
       new aws_events_targets.LambdaFunction(pveRating),
     )
     bucket.grantRead(pveRating)
+    webBucket.grantWrite(pveRating)
     pveRating.addToRolePolicy(s3AccessPolicy)
     gcpSecret.grantRead(pveRating)
 
@@ -128,8 +138,9 @@ export class RaptorStatsStack extends Stack {
       .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
   }
 }
-
+const env = { account: '190920611368', region: 'eu-north-1' }
 const app = new App()
+new WebStack(app, 'WebStack', { env })
 new RaptorStatsStack(app, 'RaptorStatsStack', {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
@@ -139,7 +150,7 @@ new RaptorStatsStack(app, 'RaptorStatsStack', {
   // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
   /* Uncomment the next line if you know exactly what Account and Region you
    * want to deploy the stack to. */
-  env: { account: '190920611368', region: 'eu-north-1' },
+  env,
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
 })
 app.synth()
