@@ -52,13 +52,6 @@ export class RaptorStatsStack extends Stack {
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
       schedule: aws_events.Schedule.expression('cron(0 */2 * * ? *)'),
     })
-    const eventRulePveRating = new aws_events.Rule(
-      this,
-      'scheduleRulePveRating',
-      {
-        schedule: aws_events.Schedule.expression('cron(8 */2 * * ? *)'),
-      },
-    )
 
     assert(typeof process.env.DISCORD_USERNAME === 'string')
 
@@ -101,13 +94,11 @@ export class RaptorStatsStack extends Stack {
       },
     })
 
-    eventRulePveRating.addTarget(
-      new aws_events_targets.LambdaFunction(pveRating),
-    )
     bucket.grantRead(pveRating)
     webBucket.grantWrite(pveRating)
     pveRating.addToRolePolicy(s3AccessPolicy)
     gcpSecret.grantRead(pveRating)
+    pveRating.grantInvoke(raptorStats)
 
     const exceptionTopic = new aws_sns.Topic(this, 'lambda-exception-topic', {
       displayName: 'lambda-exception-topic',

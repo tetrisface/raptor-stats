@@ -132,12 +132,7 @@ def process_games(games, prefix):
     )
 
     null_columns_df = (
-        games[
-            list(
-                set(ai_gamesetting_all_columns + ['Map'])
-                - {'nuttyb_hp', 'multiplier_maxdamage'}
-            )
-        ]
+        games[list(set(ai_gamesetting_all_columns + ['Map']) - {'nuttyb_hp'})]
         .null_count()
         .transpose(include_header=True, header_name='setting', column_names=['value'])
         .filter(pl.col('value') > 0)

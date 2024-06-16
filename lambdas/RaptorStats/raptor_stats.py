@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import time
+import boto3
 
 import gspread
 import polars as pl
@@ -294,6 +295,18 @@ def main():
 
     # store
     store_df(games, replay_details_file_name)
+
+    if not dev:
+        logger.info('Invoking PveRating lambda')
+        lambda_client = boto3.client('lambda')
+
+        response = lambda_client.invoke(
+            FunctionName='PveRating',
+            InvocationType='Event',  # You can use 'Event' for asynchronous invocation
+            # Payload=json.dumps({}),
+        )
+
+        logger.info(f'Invoke response: {response}')
 
     games = games.filter(
         pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)

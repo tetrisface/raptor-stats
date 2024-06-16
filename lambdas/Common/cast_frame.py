@@ -348,11 +348,12 @@ def cast_frame(_df):
             except Exception as e:
                 logger.debug(e)
 
-    _df = _df.with_columns(
-        pl.col('startTime').str.to_datetime(
-            '%+', time_unit='ns', time_zone='UTC', strict=True, exact=True
+    if _df[['startTime']].dtypes[0] != pl.Datetime:
+        _df = _df.with_columns(
+            pl.col('startTime').str.to_datetime(
+                '%+', time_unit='ns', time_zone='UTC', strict=True, exact=True
+            )
         )
-    )
     for col in in_df_float_cols:
         if '_spawntimemult' in col:
             _df = _df.cast(
@@ -428,6 +429,10 @@ def cast_frame(_df):
             pl.col(x).fill_null(1)
             for x in [
                 'evocomxpmultiplier',
+                'multiplier_maxdamage',
+                'multiplier_energycost',
+                'multiplier_metalcost',
+                'multiplier_buildtimecost',
                 'scav_graceperiodmult',
             ]
             if x in _df.columns

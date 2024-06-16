@@ -2,7 +2,6 @@ import {
   RemovalPolicy,
   Stack,
   StackProps,
-  aws_certificatemanager,
   aws_cloudfront,
   aws_cloudfront_origins,
   aws_s3,
@@ -52,16 +51,16 @@ export class WebStack extends Stack {
           },
         ),
       },
-      domainNames: ['pverating.bar', 'www.pverating.bar'],
-      certificate: new aws_certificatemanager.Certificate(
-        this,
-        'CustomDomainCertificate',
-        {
-          domainName: '*.pverating.bar',
-          validation: aws_certificatemanager.CertificateValidation.fromDns(),
-          subjectAlternativeNames: ['pverating.bar', 'www.pverating.bar'],
-        },
-      ),
+      // domainNames: ['pverating.bar', 'www.pverating.bar'],
+      // certificate: new aws_certificatemanager.Certificate(
+      //   this,
+      //   'CustomDomainCertificate',
+      //   {
+      //     domainName: '*.pverating.bar',
+      //     validation: aws_certificatemanager.CertificateValidation.fromDns(),
+      //     subjectAlternativeNames: ['pverating.bar', 'www.pverating.bar'],
+      //   },
+      // ),
     })
   }
 }
