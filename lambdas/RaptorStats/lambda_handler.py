@@ -14,7 +14,7 @@ if os.environ.get('ENV', 'prod') == 'dev':
 def handler(event, context):
     try:
         logger.info('event: %s', event)
-        os.environ['details_fetch_limit'] = event.get('details_fetch_limit', '20')
+        os.environ['details_fetch_limit'] = event.get('details_fetch_limit', '200')
         return raptor_stats.main()
     except Exception as e:
         logger.exception(e)

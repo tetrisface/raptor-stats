@@ -50,7 +50,7 @@ export class RaptorStatsStack extends Stack {
     )
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
-      schedule: aws_events.Schedule.expression('cron(0 */2 * * ? *)'),
+      schedule: aws_events.Schedule.expression('cron(0 */6 * * ? *)'),
     })
 
     assert(typeof process.env.DISCORD_USERNAME === 'string')
@@ -89,7 +89,7 @@ export class RaptorStatsStack extends Stack {
           cmd: ['PveRating.lambda_handler.handler'],
         }),
         functionName: 'PveRating',
-        timeout: Duration.seconds(444),
+        timeout: Duration.seconds(500),
         memorySize: 2400,
       },
     })
