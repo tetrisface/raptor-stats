@@ -1,4 +1,24 @@
 {
   "python.analysis.typeCheckingMode": "off",
-  "githubPullRequests.createOnPublishBranch": "never"
+  "githubPullRequests.createOnPublishBranch": "never",
+  "sonarlint.rules": {
+    "typescript:S125": {
+      "level": "off"
+    },
+    "javascript:S125": {
+      "level": "off"
+    },
+    "javascript:S1763": {
+      "level": "off"
+    },
+    "python:S116": {
+      "level": "on"
+    },
+    "python:S1192": {
+      "level": "off"
+    },
+    "python:S125": {
+      "level": "off"
+    }
+  }
 }
