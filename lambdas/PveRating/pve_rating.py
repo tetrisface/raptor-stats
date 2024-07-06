@@ -248,7 +248,7 @@ def process_games(games, prefix):
 
         merge_games = games.filter(
             pl.col('id').ne(game['id']),
-            pl.col('nuttyb_hp').is_null() if game['nuttyb_hp'] is None else False,
+            pl.col('nuttyb_hp').is_null() if game['nuttyb_hp'] is None else True,
             *[
                 pl.col(x).eq(game[x])
                 for x in (_ai_gamesetting_equal_columns | {'Map Name'})
@@ -286,7 +286,9 @@ def process_games(games, prefix):
         )
 
     def teammates_weighted_success_rate(in_struct):
-        logger.info(f'collecting {len(in_struct)} gamesetting teammate completions')
+        logger.info(
+            f"summing players' completions for gamesettings ({len(in_struct)}) depending on number of teammates"
+        )
 
         player_names = [
             winner
@@ -295,6 +297,7 @@ def process_games(games, prefix):
             for winner in winners
         ]
 
+        # fixme skip lower difficulty gamesettings
         gamesetting_result_row_items = []
         for gamesetting in in_struct:
             difficulty_goal = gamesetting['Difficulty']
@@ -398,16 +401,6 @@ def process_games(games, prefix):
             .then(pl.col('winners'))
             .drop_nulls()
             .alias('games_winners'),
-            pl.col('winners')
-            .flatten()
-            .drop_nulls()
-            .value_counts()
-            .alias('winners_count'),
-            pl.col('players')
-            .flatten()
-            .drop_nulls()
-            .value_counts()
-            .alias('players_count'),
         )
         .with_columns(
             pl.col('Merged Win Replays')
@@ -425,7 +418,7 @@ def process_games(games, prefix):
         .select(cs.numeric() & cs.by_name(*ai_gamesetting_all_columns))
         .transpose()
         .corr()
-        .fill_nan(0.5)
+        .fill_nan(0)
         .mean()
         .transpose()
         .to_series()
@@ -557,11 +550,15 @@ def process_games(games, prefix):
 
     logger.info('creating pve ratings')
 
-    # Difficulty Completion probably nulls when filtered
+    # FIXME TODO Difficulty Completion probably nulls when filtered, probably not since scavengers still have nulls
     pve_rating_players = (
         group_df.filter(
-            pl.col('#Players').ge(15)
-            | pl.col('Difficulty').is_between(0, 1, closed='none')
+            True
+            if prefix == 'Scavengers'
+            else (
+                pl.col('#Players').ge(15)
+                | pl.col('Difficulty').is_between(0, 1, closed='none')
+            )
         )
         .with_columns(
             pl.struct(
@@ -717,22 +714,25 @@ def update_sheets(gamesettings_df, rating_number_df, prefix):
     percent_int_cols = [
         rating_number_df.columns.index(x)
         for x in [
-            'Weighted Difficulty',
-            'Difficulty Record',
-            'Win Rate',
             'Award Rate',
+            'Difficulty Completion',
+            'Difficulty Record',
             'Setting Corr.',
+            'Weighted Difficulty',
+            'Win Rate',
         ]
     ]
 
     weighted_award_rate_col_index = rating_number_df.columns.index(
         'Weighted Award Rate'
     )
-    int_cols = [
-        index for index, x in enumerate(rating_number_df.columns) if 'Rank' in x
-    ] + [rating_number_df.columns.index(x) for x in ['#Settings']]
-    pve_rating_col_index = rating_number_df.columns.index('PVE Rating')
     n_games_col_index = rating_number_df.columns.index('#Games')
+    int_cols = (
+        [index for index, x in enumerate(rating_number_df.columns) if 'Rank' in x]
+        + [rating_number_df.columns.index(x) for x in ['#Settings']]
+        + [n_games_col_index]
+    )
+    pve_rating_col_index = rating_number_df.columns.index('PVE Rating')
 
     batch_requests = [
         {

@@ -14,12 +14,14 @@ if dev:
 string_columns = {
     'assistdronesenabled',
     'commanderbuildersenabled',
+    'comrespawn',
     'deathmode',
     'draft_mode',
+    'evocomlevelupmethod',
     'experimentalshields',
     'experimentalstandardgravity',
-    'lootboxes',
     'lootboxes_density',
+    'lootboxes',
     'map_tidal',
     'raptor_raptorstart',
     'ruins_density',
@@ -50,11 +52,13 @@ string_columns = {
     'tweakdefs8',
     'tweakdefs9',
 }
+
 int_columns = {
     'ai_incomemultiplier',
     'air_rework',
     'allowpausegameplay',
     'allowuserwidgets',
+    'animationcleanup',
     'april1',
     'april1extra',
     'assistdronesair',
@@ -105,6 +109,7 @@ int_columns = {
     'map_waterlevel',
     'maxunits',
     'metalperpoint',
+    'no_comtrans',
     'norush',
     'norushtimer',
     'numberofcontrolpoints',
@@ -192,6 +197,7 @@ nuttyb_hp_enum = pl.Enum(
 nuttyb_hp_df = pl.DataFrame(
     [(hp, tweak) for hp, tweaks in nuttyb_hp_multiplier.items() for tweak in tweaks],
     schema=['nuttyb_hp', 'tweakdefs1'],
+    orient='row',
 )
 
 
@@ -318,7 +324,6 @@ def cast_frame(_df):
     other_cols = set(_df.columns) - accounted_for_columns
     if len(other_cols) > 0:
         logger.error(f'not casted cols: {other_cols}')
-        raise Exception(f'not casted cols: {other_cols}')
 
     num_types = [
         pl.Boolean,
@@ -399,7 +404,6 @@ def cast_frame(_df):
                     strict=True,
                 )
             except Exception as e:
-                logger.exception(e)
                 logger.info(
                     f'Could not cast decimal column "{col}" to "{decimal_type}"'
                 )

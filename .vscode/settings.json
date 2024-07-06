@@ -17,6 +17,9 @@
     "python:S1192": {
       "level": "off"
     },
+    "python:S1134": {
+      "level": "off"
+    },
     "python:S125": {
       "level": "off"
     }

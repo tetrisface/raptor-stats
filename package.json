@@ -2,12 +2,12 @@
   "name": "raptor-stats",
   "version": "0.1.0",
   "devDependencies": {
-    "@types/node": "20.14.2",
+    "@types/node": "20.14.10",
     "ts-node": "^10.9.2",
-    "typescript": "~5.4.5"
+    "typescript": "~5.5.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.146.0",
+    "aws-cdk-lib": "2.148.0",
     "constructs": "^10.3.0",
     "source-map-support": "^0.5.21"
   },

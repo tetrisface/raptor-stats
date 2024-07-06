@@ -40,6 +40,7 @@ logger.setLevel(logging.INFO)
 replays_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
 bucket_path = 's3://raptor-stats-parquet/'
+web_bucket_path = 's3://pve-rating-web/'
 
 
 def _winners(row):
@@ -63,13 +64,17 @@ def is_player_ai_mixed(allyTeams):
 
 
 def store_df(df, path):
-    path = path if dev else bucket_path + path
-    logger.info(f'writing {len(df)} to {path}')
     if dev:
+        logger.info(f'writing {len(df)} to {path}')
         df.write_parquet(path)
     else:
+        parquet_path = bucket_path + path
+        web_path = web_bucket_path + path
+        logger.info(f'writing {len(df)} to {parquet_path} and {web_path}')
         fs = s3fs.S3FileSystem()
-        with fs.open(path, mode='wb') as f:
+        with fs.open(parquet_path, mode='wb') as f:
+            df.write_parquet(f)
+        with fs.open(web_path, mode='wb') as f:
             df.write_parquet(f)
 
 
@@ -320,7 +325,7 @@ def main():
         )
         .select(
             pl.col('startTime'),
-            ((pl.col('startTime') + pl.col('durationMs') * 1000000) / 1000)
+            (pl.col('startTime') + pl.duration(milliseconds='durationMs'))
             .cast(pl.Datetime)
             .alias('newEndTime'),
         )

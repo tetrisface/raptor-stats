@@ -28,6 +28,11 @@ run-dev:
 run-fetch-dev:
 	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m RaptorStats.raptor_stats)
 
+migrate:
+	make download
+	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m scripts.migrate)
+	make upload
+
 install:
 	rm -rf cdk.out/*
 	cdk deploy --all
@@ -58,3 +63,4 @@ backup:
 update:
 	bunx npm-check-updates -i
 	pipenv update
+	bun install -g aws-cdk ts-node

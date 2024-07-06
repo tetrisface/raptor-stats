@@ -11,6 +11,7 @@ import {
   aws_events_targets,
   aws_iam,
   aws_lambda,
+  aws_logs,
   aws_s3,
   aws_secretsmanager,
   aws_sns,
@@ -50,7 +51,7 @@ export class RaptorStatsStack extends Stack {
     )
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
-      schedule: aws_events.Schedule.expression('cron(0 */6 * * ? *)'),
+      schedule: aws_events.Schedule.expression('cron(0 */3 * * ? *)'),
     })
 
     assert(typeof process.env.DISCORD_USERNAME === 'string')
@@ -65,10 +66,11 @@ export class RaptorStatsStack extends Stack {
         DISCORD_USERNAME: process.env.DISCORD_USERNAME,
       },
       timeout: Duration.seconds(500),
-      memorySize: 1300,
+      memorySize: 1700,
       architecture: aws_lambda.Architecture.ARM_64,
       retryAttempts: 0,
       maxEventAge: Duration.minutes(5),
+      logRetention: aws_logs.RetentionDays.ONE_MONTH,
     }
     const raptorStats = new lambda.DockerImageFunction(
       this,
@@ -76,6 +78,7 @@ export class RaptorStatsStack extends Stack {
       lambdaProps,
     )
     bucket.grantReadWrite(raptorStats)
+    webBucket.grantWrite(raptorStats)
     raptorStats.addToRolePolicy(s3AccessPolicy)
     eventRuleRaptorStats.addTarget(
       new aws_events_targets.LambdaFunction(raptorStats),
@@ -89,8 +92,8 @@ export class RaptorStatsStack extends Stack {
           cmd: ['PveRating.lambda_handler.handler'],
         }),
         functionName: 'PveRating',
-        timeout: Duration.seconds(500),
-        memorySize: 2400,
+        timeout: Duration.seconds(900),
+        memorySize: 3000,
       },
     })
 
@@ -112,7 +115,7 @@ export class RaptorStatsStack extends Stack {
       .createAlarm(this, 'lambda-raptorstats-exception-alarm', {
         threshold: 1,
         evaluationPeriods: 1,
-        alarmDescription: 'Alarm if any exception is seen on RaptorStats',
+        alarmDescription: 'Exception on RaptorStats',
         treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
       })
       .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
@@ -123,7 +126,7 @@ export class RaptorStatsStack extends Stack {
       .createAlarm(this, 'lambda-pverating-exception-alarm', {
         threshold: 1,
         evaluationPeriods: 1,
-        alarmDescription: 'Alarm if any exception is seen on pveRating',
+        alarmDescription: 'Exception on PveRating',
         treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
       })
       .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
