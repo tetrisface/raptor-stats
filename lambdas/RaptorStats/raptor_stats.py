@@ -1,41 +1,36 @@
 import datetime
 import json
-import logging
 import os
-import sys
 import time
-import boto3
+import warnings
 
+import boto3
 import gspread
 import polars as pl
 import polars.selectors as cs
 import pytz
 import requests
 import s3fs
-
-from Common.common import get_df, get_secret
-
 from Common.cast_frame import cast_frame
+from Common.common import get_df, get_secret
 from Common.gamesettings import (
-    gamesettings_scav,
+    gamesetting_equal_columns,
     gamesettings,
+    gamesettings_scav,
     higher_harder,
-    nuttyb_hp_multiplier,
     lower_harder,
     nutty_b_main,
+    nuttyb_hp_multiplier,
     possible_tweak_columns,
     various,
-    gamesetting_equal_columns,
 )
+from Common.logger import get_logger
 
+logger = get_logger()
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 replays_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
@@ -63,19 +58,23 @@ def is_player_ai_mixed(allyTeams):
     return False
 
 
-def store_df(df, path):
+def store_df(df, path, store_web=True):
     if dev:
         logger.info(f'writing {len(df)} to {path}')
         df.write_parquet(path)
     else:
         parquet_path = bucket_path + path
-        web_path = web_bucket_path + path
+        web_path = web_bucket_path + path if store_web else ''
         logger.info(f'writing {len(df)} to {parquet_path} and {web_path}')
         fs = s3fs.S3FileSystem()
-        with fs.open(parquet_path, mode='wb') as f:
-            df.write_parquet(f)
-        with fs.open(web_path, mode='wb') as f:
-            df.write_parquet(f)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=UserWarning)
+
+            with fs.open(parquet_path, mode='wb') as f:
+                df.write_parquet(f)
+            if store_web:
+                with fs.open(web_path, mode='wb') as f:
+                    df.write_parquet(f)
 
 
 def main():
@@ -302,16 +301,13 @@ def main():
     store_df(games, replay_details_file_name)
 
     if not dev:
-        logger.info('Invoking PveRating lambda')
+        logger.info('Invoking PveRating')
         lambda_client = boto3.client('lambda')
 
-        response = lambda_client.invoke(
+        lambda_client.invoke(
             FunctionName='PveRating',
-            InvocationType='Event',  # You can use 'Event' for asynchronous invocation
-            # Payload=json.dumps({}),
+            InvocationType='Event',
         )
-
-        logger.info(f'Invoke response: {response}')
 
     games = games.filter(
         pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)

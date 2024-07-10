@@ -1,54 +1,40 @@
 import datetime
 import io
-import boto3
+import os
 import random
 import re
-import logging
-import sys
-import os
+import warnings
 
+import boto3
 import gspread
 import numpy as np
 import orjson
 import polars as pl
 import polars.selectors as cs
-
-from Common.gamesettings import (
-    gamesetting_equal_columns,
-    lower_harder,
-    higher_harder,
-)
-from Common.common import (
-    get_df,
-    get_secret,
-    replay_details_file_name,
-)
+import s3fs
 from Common.cast_frame import (
     add_computed_cols,
     cast_frame,
     reorder_column,
     reorder_tweaks,
 )
+from Common.common import (
+    get_df,
+    get_secret,
+    replay_details_file_name,
+)
+from Common.gamesettings import (
+    gamesetting_equal_columns,
+    higher_harder,
+    lower_harder,
+)
+from Common.logger import get_logger
+
+logger = get_logger()
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
-
-
-class CustomFormatter(logging.Formatter):
-    def format(self, record):
-        record.relativeCreated = f'{round(record.relativeCreated):7,}'.replace(',', ' ')
-        return super().format(record)
-
-
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-logger = logging.getLogger()
-formatter = CustomFormatter(
-    ('%(relativeCreated)s ' + logger.handlers[0].formatter._fmt)
-    .replace(':%', ' %')
-    .replace('%(name)s ', '')
-)
-logger.handlers[0].setFormatter(formatter)
 
 teammates_completion_fit_input, teammates_completion_fit_output = zip(
     *[
@@ -70,7 +56,7 @@ def main():
         ~pl.col('is_player_ai_mixed')
         & pl.col('has_player_handicap').eq(False)
         & pl.col('startTime')
-        .dt.datetime()
+        .dt.replace_time_zone(None)
         .gt(datetime.datetime.now() - datetime.timedelta(days=120))
     )
 
@@ -142,6 +128,11 @@ def process_games(games, prefix):
 
     logger.info(f'total replays {len(games)}')
 
+    award_sum_expression = pl.when(pl.col('players_extended').list.len().gt(1)).then(
+        pl.when(pl.col('Player').eq(pl.col('damage_award'))).then(1).otherwise(0)
+        + pl.when(pl.col('Player').eq(pl.col('eco_award'))).then(1).otherwise(0)
+    )
+
     basic_player_aggregates = (
         games.unnest('damage_eco_award')
         .explode('players')
@@ -150,45 +141,18 @@ def process_games(games, prefix):
         .agg(
             pl.len().alias('n_games'),
             pl.col('Player').is_in('winners').mean().alias('Win Rate'),
-            (
-                pl.when(
-                    pl.col('Player').eq(pl.col('damage_award'))
-                    & pl.col('Player').is_in('winners')
-                    & pl.col('players_extended').list.len().gt(1)
-                )
-                .then(1)
-                .otherwise(0)
-                + pl.when(
-                    pl.col('Player').eq(pl.col('eco_award'))
-                    & pl.col('Player').is_in('winners')
-                    & pl.col('players_extended').list.len().gt(1)
-                )
-                .then(1)
-                .otherwise(0)
-            )
+            pl.when(pl.col('Player').is_in('winners'))
+            .then(award_sum_expression)
+            .otherwise(None)
+            .drop_nulls()
             .mean()
             .alias('Award Rate'),
-            (
-                (
-                    (
-                        pl.when(
-                            pl.col('Player').eq(pl.col('damage_award'))
-                            & pl.col('Player').is_in('winners')
-                            & pl.col('players_extended').list.len().gt(1)
-                        )
-                        .then(1)
-                        .otherwise(0)
-                        + pl.when(
-                            pl.col('Player').eq(pl.col('eco_award'))
-                            & pl.col('Player').is_in('winners')
-                            & pl.col('players_extended').list.len().gt(1)
-                        )
-                        .then(1)
-                        .otherwise(0)
-                    )
-                    * (pl.col('players_extended').list.len() - 1)
-                ).mean()
-            ).alias('Weighted Award Rate'),
+            pl.when(pl.col('Player').is_in('winners'))
+            .then(award_sum_expression * (pl.col('players_extended').list.len() - 1))
+            .otherwise(None)
+            .drop_nulls()
+            .mean()
+            .alias('Weighted Award Rate'),
         )
     )
 
@@ -220,7 +184,9 @@ def process_games(games, prefix):
                 x for x in _ai_gamesetting_higher_harder if 'evocom' not in x
             }
             _ai_gamesetting_lower_harder = {
-                x for x in _ai_gamesetting_lower_harder if 'evocom' not in x
+                x
+                for x in _ai_gamesetting_lower_harder
+                if 'evocom' not in x or x == 'evocom'
             }
         if game['commanderbuildersenabled'] == 'disabled':
             _ai_gamesetting_equal_columns = {
@@ -230,7 +196,9 @@ def process_games(games, prefix):
                 x for x in _ai_gamesetting_higher_harder if 'commanderbuilders' not in x
             }
             _ai_gamesetting_lower_harder = {
-                x for x in _ai_gamesetting_lower_harder if 'commanderbuilders' not in x
+                x
+                for x in _ai_gamesetting_lower_harder
+                if 'commanderbuilders' not in x or x == 'commanderbuildersenabled'
             }
         if game['assistdronesenabled'] == 'disabled':
             _ai_gamesetting_equal_columns = {
@@ -240,7 +208,9 @@ def process_games(games, prefix):
                 x for x in _ai_gamesetting_higher_harder if 'assistdrones' not in x
             }
             _ai_gamesetting_lower_harder = {
-                x for x in _ai_gamesetting_lower_harder if 'assistdrones' not in x
+                x
+                for x in _ai_gamesetting_lower_harder
+                if 'assistdrones' not in x or x == 'assistdronesenabled'
             }
 
         if game['nuttyb_hp'] is None:
@@ -602,6 +572,7 @@ def process_games(games, prefix):
             pl.col('teammates_completion').max().alias('Weighted Difficulty'),
             pl.col('#Settings').sum(),
             pl.col('Setting Corr.').median(),
+            # pl.when(pl.col('Player').is_in(pl.col('winners_flat'))).then(pl.col('winners')) # TODO
         )
         .join(
             basic_player_aggregates,
@@ -671,45 +642,53 @@ def process_games(games, prefix):
 
 
 def update_sheets(gamesettings_df, rating_number_df, prefix):
+    spreadsheet_id = (
+        '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
+        if dev
+        else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
+    )
+
+    parquet_file_name = f'PveRating.{prefix}_gamesettings.parquet'
+    path = (
+        f'{'' if dev else 's3://raptor-stats-parquet/spreadsheets/'}{parquet_file_name}'
+    )
+    logger.info(f'Writing {len(gamesettings_df)} rows to {path}')
+    fs = s3fs.S3FileSystem()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=UserWarning)
+        with fs.open(path, 'wb') as f:
+            gamesettings_df.write_parquet(f)
+
+    payload = {
+        'id': spreadsheet_id,
+        'sheet_name': prefix + ' Gamesettings',
+        'columns': [gamesettings_df.columns],
+        'parquet_file_name': f'{parquet_file_name}',
+        'batch_requests': [],
+        'clear': not dev and random.randint(1, 10) % 10 == 0,
+    }
+
+    lambda_client = boto3.client('lambda')
+
+    lambda_client.invoke(
+        FunctionName='Spreadsheet',
+        InvocationType='Event',  # You can use 'Event' for asynchronous invocation
+        Payload=orjson.dumps(payload),
+    )
+
     if dev:
         gc = gspread.service_account()
-        spreadsheet = gc.open_by_key('1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE')
+        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
     else:
-        try:
-            gc = gspread.service_account_from_dict(orjson.loads(get_secret()))
-            spreadsheet = gc.open_by_key('18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY')
-        except gspread.exceptions.APIError as e:
-            logger.exception(e)
-            logger.info('failed connection to google, stopping')
-            return 'failed'
+        gc = gspread.service_account_from_dict(orjson.loads(get_secret()))
+        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
+    gamesettings_worksheet = pve_rating_spreadsheet.worksheet(prefix + ' Gamesettings')
+    pve_rating_worksheet = pve_rating_spreadsheet.worksheet(prefix + ' PVE Rating')
 
-    gamesettings_worksheet = spreadsheet.worksheet(prefix + ' Gamesettings')
-
-    if not dev and random.randint(1, 10) % 10 == 0:
-        logger.info('clearing gamesettings sheet')
-        gamesettings_worksheet.clear()
-        gamesettings_worksheet.update(
-            values=[['UPDATE IN PROGRESS']],
-            value_input_option=gspread.utils.ValueInputOption.user_entered,
-        )
-
-    logger.info(f'pushing {len(gamesettings_df)} {prefix} gamesettings')
-    gamesettings_worksheet.update(
-        values=[gamesettings_df.columns] + gamesettings_df.rows(),
-        value_input_option=gspread.utils.ValueInputOption.user_entered,
-    )
     spawntimemult_index = gamesettings_df.get_column_index(
         'raptor_spawntimemult'
     ) or gamesettings_df.get_column_index('scav_spawntimemult')
     del gamesettings_df
-
-    pve_rating_worksheet = spreadsheet.worksheet(prefix + ' PVE Rating')
-    pve_rating_worksheet.clear()
-    logger.info(f'pushing {len(rating_number_df)} {prefix} pve player ratings')
-    pve_rating_worksheet.update(
-        values=[rating_number_df.columns] + rating_number_df.rows(),
-        value_input_option=gspread.utils.ValueInputOption.user_entered,
-    )
 
     percent_int_cols = [
         rating_number_df.columns.index(x)
@@ -881,7 +860,31 @@ def update_sheets(gamesettings_df, rating_number_df, prefix):
             },
         ],
     ]
-    spreadsheet.batch_update({'requests': batch_requests})
+
+    parquet_file_name = f'PveRating.{prefix}_pve_rating.parquet'
+    fs = s3fs.S3FileSystem()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=UserWarning)
+        with fs.open(
+            f'{'' if dev else 's3://raptor-stats-parquet/spreadsheets/'}{parquet_file_name}',
+            'wb',
+        ) as f:
+            rating_number_df.write_parquet(f)
+
+    payload = {
+        'id': spreadsheet_id,
+        'sheet_name': prefix + ' PVE Rating',
+        'columns': [rating_number_df.columns],
+        'parquet_file_name': parquet_file_name,
+        'batch_requests': batch_requests,
+        'clear': True,
+    }
+    logger.info(f'Invoking Spreadsheet with payload {payload}')
+    lambda_client.invoke(
+        FunctionName='Spreadsheet',
+        InvocationType='Event',  # You can use 'Event' for asynchronous invocation
+        Payload=orjson.dumps(payload),
+    )
 
 
 if __name__ == '__main__':

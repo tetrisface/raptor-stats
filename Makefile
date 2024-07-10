@@ -20,7 +20,8 @@ notebook-to-py:
 	pipenv run jupyter nbconvert --to python raptor_stats.ipynb --output aws_lambda/raptor_stats.py
 
 run:
-	aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
+	# aws lambda invoke --function-name arn:aws:lambda:eu-north-1:190920611368:function:RaptorStats /dev/stdout
+	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m scripts.invoke)
 
 run-dev:
 	(cd lambdas && PIPENV_VERBOSITY=-1 ENV=dev pipenv run python -m PveRating.pve_rating)
@@ -42,11 +43,8 @@ deploy: install
 install-run:
 	make install && make run
 
-tail-stats:
-	aws logs tail /aws/lambda/RaptorStats --follow
-
-tail-skill:
-	aws logs tail /aws/lambda/PveRating --follow
+tail:
+	aws logs tail /aws/lambda/RaptorStats --follow & aws logs tail /aws/lambda/PveRating --follow & aws logs tail /aws/lambda/Spreadsheet --follow
 
 upload:
 	aws s3 cp lambdas/replays.parquet s3://raptor-stats-parquet/replays.parquet

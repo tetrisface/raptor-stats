@@ -1,10 +1,12 @@
 import datetime
-import logging
 import os
 
 import numpy as np
 import polars as pl
 from Common.gamesettings import nuttyb_hp_multiplier, possible_tweak_columns
+from Common.logger import get_logger
+
+logger = get_logger()
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
@@ -184,8 +186,6 @@ float_columns = {
     'raptor_spawntimemult',
     'scav_spawntimemult',
 }
-
-logger = logging.getLogger()
 
 if dev:
     logger.setLevel(logging.DEBUG)

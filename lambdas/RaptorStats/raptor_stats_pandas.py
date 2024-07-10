@@ -2,14 +2,14 @@ import pandas as pd
 import requests
 import os
 import time
-import logging
 import json
 
 from warnings import simplefilter
+from Common.logger import get_logger
+
+logger = get_logger()
 
 simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
 pd.options.mode.copy_on_write = True
 
@@ -41,7 +41,9 @@ def get_df(path):
 def store_df(df, path):
     path = path if dev else bucket_path + path
     logger.info(f'writing to {len(df)} {path}')
-    df.to_parquet(path)
+    df.to_parquet(
+        path,
+    )
 
 
 def main():

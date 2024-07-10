@@ -1,11 +1,13 @@
-import logging
 import os
 import boto3
 import polars as pl
 
+from Common.logger import get_logger
+
+logger = get_logger()
+
 dev = os.environ.get('ENV', 'prod') == 'dev'
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+
 
 replay_root_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
@@ -18,7 +20,7 @@ def get_df_s3(path):
     _df = pl.read_parquet(s3_path)
     if dev:
         logger.info(f'writing {len(_df)} to {path}')
-        _df.to_parquet(path)
+        _df.write_parquet(path)
     return _df
 
 
