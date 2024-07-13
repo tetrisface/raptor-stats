@@ -394,18 +394,14 @@ possible_tweak_columns = (
     + [f'tweakdefs{i}' for i in range(1, 10)]
 )
 
-gamesetting_equal_columns = set(
-    possible_tweak_columns
-    + [
-        'comrespawn',
-        'evocomlevelupmethod',
-        'lootboxes_density',
-        'no_comtrans',
-    ]
-)
+gamesetting_equal_columns = set(possible_tweak_columns) | {
+    'comrespawn',
+    'evocomlevelupmethod',
+    'lootboxes_density',
+    'no_comtrans',
+}
+
 for gamesetting in gamesettings.values():
     gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
 
-gamesetting_equal_columns = (
-    gamesetting_equal_columns - set(lower_harder) - set(higher_harder)
-)
+gamesetting_equal_columns = gamesetting_equal_columns - lower_harder - higher_harder

@@ -1,8 +1,10 @@
 import os
+import warnings
 
 import gspread
 import orjson
 import polars as pl
+import s3fs
 from Common.common import get_secret
 from Common.logger import get_logger
 
@@ -13,11 +15,24 @@ if dev:
     from bpdb import set_trace as s  # noqa: F401
 
 
+def get_or_create_worksheet(spreadsheet, sheet_name, rows=1, cols=1, index=0):
+    try:
+        worksheet = spreadsheet.worksheet(sheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = spreadsheet.add_worksheet(
+            title=sheet_name,
+            rows=rows,
+            cols=cols,
+            index=index,
+        )
+    return worksheet
+
+
 def main(event):
     _id = event['id']
     sheet_name = event['sheet_name']
     columns = event['columns']
-    parquet_file_name = event['parquet_file_name']
+    parquet_path = event['parquet_path']
     batch_requests = event['batch_requests']
     clear = event['clear']
 
@@ -33,7 +48,7 @@ def main(event):
             logger.info('failed connection to google, stopping')
             return 'failed'
 
-    worksheet = spreadsheet.worksheet(sheet_name)
+    worksheet = get_or_create_worksheet(spreadsheet, sheet_name)
 
     if clear:
         logger.info('clearing sheet')
@@ -43,12 +58,14 @@ def main(event):
             value_input_option=gspread.utils.ValueInputOption.user_entered,
         )
 
-    if dev:
-        df = pl.read_parquet(parquet_file_name)
-    else:
-        df = pl.read_parquet(
-            f's3://raptor-stats-parquet/spreadsheets/{parquet_file_name}'
-        )
+    fs = s3fs.S3FileSystem()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=UserWarning)
+
+        with fs.open(parquet_path, mode='rb') as f:
+            df = pl.read_parquet(f)
+
+    # df = pl.read_parquet(parquet_path)
 
     logger.info(f'pushing {len(df)} to {sheet_name}')
     worksheet.update(
@@ -58,7 +75,3 @@ def main(event):
 
     if len(batch_requests) > 0:
         spreadsheet.batch_update({'requests': batch_requests})
-
-
-if __name__ == '__main__':
-    main({})

@@ -1,5 +1,6 @@
 import datetime
 import os
+import random
 
 import numpy as np
 import polars as pl
@@ -187,9 +188,6 @@ float_columns = {
     'scav_spawntimemult',
 }
 
-if dev:
-    logger.setLevel(logging.DEBUG)
-
 nuttyb_hp_enum = pl.Enum(
     ['Epic', 'Epic+', 'Epic++', 'Epicer+', 'Epicer++', 'Epicest'],
 )
@@ -199,23 +197,6 @@ nuttyb_hp_df = pl.DataFrame(
     schema=['nuttyb_hp', 'tweakdefs1'],
     orient='row',
 )
-
-
-def has_player_handicap(allyTeams):
-    for team in allyTeams:
-        for player in team['Players']:
-            if player['handicap'] > 0:
-                return True
-    return False
-
-
-def has_barbarian(allyTeams):
-    for team in allyTeams:
-        for ai in team['AIs']:
-            if ai['shortName'] == 'BarbarianAI':
-                s()
-                return True
-    return False
 
 
 def reorder_column(df, new_position, col_name):
@@ -228,6 +209,8 @@ def reorder_column(df, new_position, col_name):
 
 
 def reorder_tweaks(df):
+    if 'tweakunits' not in df.columns:
+        return df
     start_index = df.columns.index('tweakunits')
     for sub_index, tweak_column in enumerate(possible_tweak_columns[1:]):
         df = reorder_column(df, start_index + sub_index + 1, tweak_column)
@@ -276,14 +259,168 @@ def awards(row):
 
 
 def add_computed_cols(_df):
+    logger.info('Adding computed columns')
     _df = _df.filter(
-        pl.col('AllyTeams').is_not_null() & pl.col('awards').is_not_null()
+        pl.col('AllyTeams')
+        .list.eval(
+            pl.element()
+            .struct['AIs']
+            .list.eval(
+                pl.element()
+                .struct['shortName']
+                .is_in(['BARb', 'RaptorsAI', 'ScavengersAI'])
+            )
+            .flatten()
+            .drop_nulls()
+        )
+        .list.all()
     ).with_columns(
-        pl.struct('AllyTeams', 'awards')
-        .map_elements(awards, return_dtype=pl.Struct)
-        .alias('damage_eco_award')
+        raptors=pl.col('AllyTeams')
+        .list.eval(
+            pl.element()
+            .struct['AIs']
+            .list.eval(pl.element().struct['shortName'])
+            .flatten()
+        )
+        .list.contains('RaptorsAI'),
+        scavengers=pl.col('AllyTeams')
+        .list.eval(
+            pl.element()
+            .struct['AIs']
+            .list.eval(pl.element().struct['shortName'])
+            .flatten()
+        )
+        .list.contains('ScavengersAI'),
+        barbarian=pl.col('AllyTeams')
+        .list.eval(
+            pl.element()
+            .struct['AIs']
+            .list.eval(pl.element().struct['shortName'])
+            .flatten()
+        )
+        .list.contains('BARb'),
+        is_player_ai_mixed=(pl.col('AllyTeams').list.len() > 2)
+        | pl.col('AllyTeams')
+        .list.eval(
+            (pl.element().struct['Players'].list.len() > 0)
+            & (pl.element().struct['AIs'].list.len() > 0)
+        )
+        .list.any(),
+        draw=(pl.col('durationMs') == 0)
+        | pl.col('AllyTeams').list.eval(~pl.element().struct['winningTeam']).list.all(),
+        winners=pl.col('AllyTeams').list.eval(
+            pl.when(pl.element().struct['winningTeam'])
+            .then(pl.element().struct['Players'].list.eval(pl.element().struct['name']))
+            .flatten()
+            .drop_nulls()
+        ),
+        players=pl.col('AllyTeams').list.eval(
+            pl.element()
+            .struct['Players']
+            .list.eval(pl.element().struct['name'])
+            .flatten()
+            .drop_nulls()
+        ),
+        raptors_win=pl.col('AllyTeams')
+        .list.eval(
+            pl.when(pl.element().struct['winningTeam'])
+            .then(
+                pl.element()
+                .struct['AIs']
+                .list.eval(pl.element().struct['shortName'] == 'RaptorsAI')
+            )
+            .flatten()
+            .drop_nulls()
+            .any()
+        )
+        .flatten(),
+        scavengers_win=pl.col('AllyTeams')
+        .list.eval(
+            pl.when(pl.element().struct['winningTeam'])
+            .then(
+                pl.element()
+                .struct['AIs']
+                .list.eval(pl.element().struct['shortName'] == 'ScavengersAI')
+            )
+            .flatten()
+            .drop_nulls()
+            .any()
+        )
+        .flatten(),
+        barbarian_win=pl.col('AllyTeams')
+        .list.eval(
+            pl.when(pl.element().struct['winningTeam'])
+            .then(
+                pl.element()
+                .struct['AIs']
+                .list.eval(pl.element().struct['shortName'] == 'BARb')
+            )
+            .flatten()
+            .drop_nulls()
+            .any()
+        )
+        .flatten(),
     )
 
+    if 'AllyTeamsList' in _df.columns:
+        _df = _df.join(
+            _df.filter(
+                pl.col('AllyTeams').is_not_null() & pl.col('awards').is_not_null()
+            ).with_columns(
+                pl.struct('AllyTeams', 'awards')
+                .map_elements(awards, return_dtype=pl.Struct)
+                .alias('damage_eco_award')
+            )['id', 'damage_eco_award'],
+            on='id',
+            how='left',
+        )
+
+        _df = _df.with_columns(
+            pl.col('Map').struct.field('scriptName').alias('Map Name'),
+            barbarian_handicap=pl.when('barbarian')
+            .then(
+                pl.col('AllyTeams')
+                .list.eval(
+                    pl.element()
+                    .struct['AIs']
+                    .list.eval(
+                        pl.when(pl.element().struct['shortName'] == 'BARb').then(
+                            pl.element().struct['handicap']
+                        )
+                    )
+                    .flatten()
+                    .drop_nulls()
+                    .mean()
+                )
+                .flatten()
+            )
+            .otherwise(None),
+            barbarian_per_player=pl.col('AllyTeams')
+            .list.eval(
+                pl.element()
+                .struct['AIs']
+                .list.eval(
+                    pl.when(pl.element().struct['shortName'] == 'BARb')
+                    .then(1)
+                    .otherwise(0)
+                )
+                .flatten()
+                .sum()
+            )
+            .flatten()
+            / pl.col('AllyTeams')
+            .list.eval(pl.element().struct['Players'].list.len().sum())
+            .flatten(),
+            has_player_handicap=pl.col('AllyTeams')
+            .list.eval(
+                pl.element()
+                .struct['Players']
+                .list.eval(pl.element().struct['handicap'] > 0)
+                .flatten()
+                .any()
+            )
+            .flatten(),
+        )
     return _df
 
 
@@ -303,12 +440,17 @@ def cast_frame(_df):
             'AllyTeams',
             'AllyTeamsList',
             'awards',
+            'barbarian',
+            'barbarian_handicap',
+            'barbarian_per_player',
+            'barbarian_win',
             'draw',
             'fetch_success',
             'id',
             'is_player_ai_mixed',
             'Map',
-            'player_win',
+            'Map Name',
+            'player_win',  # TODO delete
             'players',
             'raptor_difficulty',
             'raptors_win',
@@ -317,13 +459,19 @@ def cast_frame(_df):
             'scavengers_win',
             'scavengers',
             'startTime',
+            'supported_ais',
             'winners',
         }
     )
 
     other_cols = set(_df.columns) - accounted_for_columns
     if len(other_cols) > 0:
-        logger.error(f'not casted cols: {other_cols}')
+        logger.error(f'New not casted cols: {other_cols}')
+        if random.randint(0, 1) == 0:
+            raise ValueError(f'New not casted cols: {other_cols}')
+
+    for col in in_df_str_cols:
+        _df = _df.with_columns(pl.col(col).cast(pl.Utf8))
 
     num_types = [
         pl.Boolean,
@@ -350,8 +498,8 @@ def cast_frame(_df):
             try:
                 _df = _df.cast({col: _type}, strict=True)
                 break
-            except Exception as e:
-                logger.debug(e)
+            except Exception:
+                pass
 
     if _df[['startTime']].dtypes[0] != pl.Datetime:
         _df = _df.with_columns(
@@ -403,8 +551,8 @@ def cast_frame(_df):
                     {col: decimal_type},
                     strict=True,
                 )
-            except Exception as e:
-                logger.info(
+            except Exception:
+                logger.error(
                     f'Could not cast decimal column "{col}" to "{decimal_type}"'
                 )
     _df = _df.with_columns(
@@ -441,14 +589,6 @@ def cast_frame(_df):
             ]
             if x in _df.columns
         ],
-        has_player_handicap=pl.col('AllyTeams').map_elements(
-            has_player_handicap, return_dtype=pl.Boolean
-        ),
-        barbarian=(
-            pl.col('AllyTeamsList')
-            if 'AllyTeamsList' in _df.columns
-            else pl.col('AllyTeams')
-        ).map_elements(has_barbarian, return_dtype=pl.Boolean),
     )
     # _df[[s.name for s in _df if s.null_count() > 0] + ['startTime']].sort(
     #     'startTime'

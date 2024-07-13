@@ -11,8 +11,8 @@ import polars.selectors as cs
 import pytz
 import requests
 import s3fs
-from Common.cast_frame import cast_frame
-from Common.common import get_df, get_secret
+from Common.cast_frame import add_computed_cols, cast_frame
+from Common.common import WRITE_DATA_BUCKET, get_df, get_secret
 from Common.gamesettings import (
     gamesetting_equal_columns,
     gamesettings,
@@ -32,30 +32,9 @@ if dev:
     from bpdb import set_trace as s  # noqa: F401
 
 
-replays_file_name = 'replays.parquet'
+replays_root_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
-bucket_path = 's3://raptor-stats-parquet/'
 web_bucket_path = 's3://pve-rating-web/'
-
-
-def _winners(row):
-    _winners = []
-    for team in row:
-        if team['winningTeam'] is True:
-            if len(team['Players']) > 0:
-                _winners.extend([player['name'] for player in team['Players']])
-            if len(team['AIs']) > 0:
-                _winners.extend([ai['shortName'] for ai in team['AIs']])
-    return _winners
-
-
-def is_player_ai_mixed(allyTeams):
-    if len(allyTeams) >= 3:
-        return True
-    for team in allyTeams:
-        if (len(team['Players']) > 0 and len(team['AIs']) > 0) or len(team['AIs']) > 1:
-            return True
-    return False
 
 
 def store_df(df, path, store_web=True):
@@ -63,8 +42,8 @@ def store_df(df, path, store_web=True):
         logger.info(f'writing {len(df)} to {path}')
         df.write_parquet(path)
     else:
-        parquet_path = bucket_path + path
-        web_path = web_bucket_path + path if store_web else ''
+        parquet_path = os.path.join(WRITE_DATA_BUCKET, path)
+        web_path = os.path.join(web_bucket_path, path) if store_web else ''
         logger.info(f'writing {len(df)} to {parquet_path} and {web_path}')
         fs = s3fs.S3FileSystem()
         with warnings.catch_warnings():
@@ -78,13 +57,13 @@ def store_df(df, path, store_web=True):
 
 
 def main():
-    games = get_df(replays_file_name)
+    games = get_df(replays_root_file_name)
 
-    n_received_rows = limit = int(os.environ.get('LIMIT', 2 if dev else 400))
+    n_received_rows = page_size = int(os.environ.get('LIMIT', 2 if dev else 400))
     page = 1
     n_total_received_rows = 0
-    while n_received_rows > 1 and limit > 0 and page <= (1 if dev else 100):
-        apiUrl = f'https://api.bar-rts.com/replays?limit={limit}&preset=team&hasBots=true&page={page}'
+    while n_received_rows > 1 and page_size > 0 and page <= (1 if dev else 100):
+        apiUrl = f'https://api.bar-rts.com/replays?limit={page_size}&preset=team&hasBots=true&page={page}'
         if page > 1:
             time.sleep(0.4)
         logger.info(f'fetching {apiUrl}')
@@ -119,73 +98,16 @@ def main():
     del api
 
     if n_total_received_rows > 0:
-        store_df(games, replays_file_name)
+        store_df(games, replays_root_file_name)
 
-    def has_raptors(row):
-        for team in row:
-            for ai in team['AIs']:
-                if ai['shortName'] == 'RaptorsAI':
-                    return True
-        return False
-
-    def has_scavengers(row):
-        for team in row:
-            for ai in team['AIs']:
-                if ai['shortName'] == 'ScavengersAI':
-                    return True
-        return False
-
-    def is_draw(row):
-        return len(row) <= 1 or all(
-            is_win == row[0]['winningTeam']
-            for is_win in [team['winningTeam'] for team in row]
-        )
-
-    def players(row):
-        _players = []
-        for team in row:
-            _players.extend([player['name'] for player in team['Players']])
-        return _players
-
+    logger.info('Adding computed columns')
     games = (
-        games.with_columns(
-            raptors=pl.col('AllyTeams').map_elements(
-                has_raptors, return_dtype=pl.Boolean
-            ),
-            scavengers=pl.col('AllyTeams').map_elements(
-                has_scavengers, return_dtype=pl.Boolean
-            ),
-            is_player_ai_mixed=pl.col('AllyTeams').map_elements(
-                is_player_ai_mixed, return_dtype=pl.Boolean
-            ),
-            draw=pl.col('AllyTeams').map_elements(is_draw, return_dtype=pl.Boolean),
-            winners=pl.col('AllyTeams').map_elements(
-                _winners, return_dtype=pl.List(str)
-            ),
-            players=pl.col('AllyTeams').map_elements(
-                players, return_dtype=pl.List(str)
-            ),
-        )
-        .with_columns(
-            raptors_win=pl.col('winners').list.contains('RaptorsAI'),
-            scavengers_win=pl.col('winners').list.contains('ScavengersAI'),
-        )
-        .filter(
-            (
-                (pl.col('raptors') | pl.col('scavengers')) & (pl.col('draw') == False)
-                # need losses for winrate-ish stats
-                # & (
-                #     pl.col('winners')
-                #     .list.set_difference(['RaptorsAI', 'ScavengersAI'])
-                #     .list.len()
-                #     > 0
-                # )
-            )
-        )
+        add_computed_cols(games)
+        .filter(pl.col('draw') == False)
+        .rename({'AllyTeams': 'AllyTeamsList'})
     )
 
-    games = games.rename({'AllyTeams': 'AllyTeamsList'})
-
+    logger.info('Fetching replay details')
     replay_details_cache = get_df(replay_details_file_name)
 
     games = games.join(
@@ -195,8 +117,9 @@ def main():
 
     previousPlayerWinStartTime = (
         games.filter(
-            (pl.col('raptors').eq(True) & pl.col('raptors_win').eq(False))
-            | (pl.col('scavengers').eq(True) & pl.col('scavengers_win').eq(False))
+            ('raptors' & pl.col('raptors_win').eq(False))
+            | ('scavengers' & pl.col('scavengers_win').eq(False))
+            | ('barbarian' & pl.col('barbarian_win').eq(False))
         )
         .select(pl.col('startTime'))
         .max()
@@ -270,12 +193,7 @@ def main():
         )
 
     null_columns_df = (
-        games[
-            list(
-                (set(gamesetting_equal_columns) | {'Map'})
-                - {'nuttyb_hp', 'multiplier_maxdamage'}
-            )
-        ]
+        games[list(gamesetting_equal_columns - {'nuttyb_hp', 'multiplier_maxdamage'})]
         .null_count()
         .transpose(include_header=True, header_name='setting', column_names=['value'])
         .filter(pl.col('value') > 0)
@@ -309,15 +227,20 @@ def main():
             InvocationType='Event',
         )
 
+    return 'done fetching'
+
     games = games.filter(
-        pl.col('raptors_win').eq(False) & pl.col('scavengers_win').eq(False)
+        pl.col('raptors_win').eq(False)
+        & pl.col('scavengers_win').eq(False)
+        & pl.col('barbarian_win').eq(False)
     )
 
     # stop without any new wins
     newMaxStartTime, newMaxEndTime = (
         games.filter(
-            (pl.col('raptors').eq(True) & pl.col('raptors_win').eq(False))
-            | (pl.col('scavengers').eq(True) & pl.col('scavengers_win').eq(False))
+            ('raptors' & pl.col('raptors_win').eq(False))
+            | ('scavengers' & pl.col('scavengers_win').eq(False))
+            | ('barbarian' & pl.col('barbarian_win').eq(False))
         )
         .select(
             pl.col('startTime'),
@@ -386,7 +309,7 @@ def main():
                     match = False
                     break
                 else:
-                    raise Exception(f'unhandled setting {setting} value {value}')
+                    raise ValueError(f'unhandled setting {setting} value {value}')
             if match:
                 return mode_name
         return ''
@@ -462,12 +385,12 @@ def main():
             return f'Raptors {format_regular_diff(row["raptor_difficulty"])}'
         elif row['scavengers'] and not row['raptors_win'] and row['scav_difficulty']:
             return f'Scavengers {format_regular_diff(row["scav_difficulty"])}'
-        elif (row['raptors'] or row['scavengers']) and (
-            row['raptors_win'] or row['scavengers_win']
+        elif (row['raptors'] or row['scavengers'] or row['barbarian']) and (
+            row['raptors_win'] or row['scavengers_win'] or row['barbarian_win']
         ):
             return 'Mixed AIs'
 
-        if not dev:
+        if not dev and row['barbarian'] == False:
             _dict = {
                 key: value
                 for key, value in row.items()
@@ -484,7 +407,7 @@ def main():
                     'scavengers',
                 ]
             }
-            logger.warning(
+            logger.debug(
                 f'no diff found for {_dict}',
             )
         return ''

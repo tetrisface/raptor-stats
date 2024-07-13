@@ -24,14 +24,7 @@ def lambda_handler_decorator(func):
     return wrapper
 
 
-_logger = None
-function_name = ''
-
-
 def get_logger(function_name=''):
-    global _logger
-    if _logger:
-        return _logger
     if os.environ.get('ENV', 'prod') == 'dev':
         logging.basicConfig(
             stream=sys.stdout,
@@ -44,7 +37,7 @@ def get_logger(function_name=''):
     function_name = (
         function_name if function_name else os.environ.get('LAMBDA_NAME', '')
     )
-    function_name = (function_name + ' ') if function_name else ''
+    function_name = function_name.ljust(12) if function_name else ''
     formatter = CustomFormatter(
         (
             f'{'' if function_name in _logger.handlers[0].formatter._fmt else function_name}{'' if '%(relativeCreated)s ' in _logger.handlers[0].formatter._fmt else '%(relativeCreated)s '}'
@@ -52,18 +45,7 @@ def get_logger(function_name=''):
         )
         .replace(':%', ' %')
         .replace('%(name)s ', '')
-        # .replace('%(relativeCreated)s %(relativeCreated)s ', '%(relativeCreated)s ')
+        .replace('%(relativeCreated)s %(relativeCreated)s ', '%(relativeCreated)s ')
     )
-    # function_name = (
-    #     function_name if function_name else os.environ.get('LAMBDA_NAME', '')
-    # )
-    # function_name = (function_name + ' ') if function_name else ''
-    # formatter = CustomFormatter(
-    #     ('%(function_name)s%(relativeCreated)s ' + _logger.handlers[0].formatter._fmt)
-    #     .replace(':%', ' %')
-    #     .replace('%(name)s ', '')
-    # )
-    # CustomFormatter.function_name = function_name
-
     _logger.handlers[0].setFormatter(formatter)
     return _logger

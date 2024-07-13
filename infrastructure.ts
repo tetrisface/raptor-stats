@@ -23,13 +23,23 @@ export class RaptorStatsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props)
 
-    const parquetBucket = new aws_s3.Bucket(this, 'raptor-stats-parquet', {
-      bucketName: 'raptor-stats-parquet',
+    const DATA_BUCKET = 'replays-processing'
+
+    const bucketProps = {
+      bucketName: DATA_BUCKET,
       blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
       accessControl: aws_s3.BucketAccessControl.PRIVATE,
       removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
       encryption: aws_s3.BucketEncryption.S3_MANAGED,
       versioned: false,
+    }
+    const dataBucket = new aws_s3.Bucket(this, DATA_BUCKET, bucketProps)
+
+    const dataBucketDev = new aws_s3.Bucket(this, DATA_BUCKET + '-dev', {
+      ...bucketProps,
+      ...{
+        bucketName: DATA_BUCKET + '-dev',
+      },
     })
 
     const webBucket = aws_s3.Bucket.fromBucketName(
@@ -46,6 +56,7 @@ export class RaptorStatsStack extends Stack {
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
       schedule: aws_events.Schedule.expression(
+        // 'cron(0 */2 * * ? *)',
         'cron(0 1,4,7,10,13,16,19,22 * * ? *)',
       ),
     })
@@ -58,10 +69,10 @@ export class RaptorStatsStack extends Stack {
       }),
       functionName: 'RaptorStats',
       environment: {
-        BUCKET_NAME: parquetBucket.bucketName,
         DISCORD_USERNAME: process.env.DISCORD_USERNAME,
+        DATA_BUCKET: `s3://${dataBucket.bucketName}/`,
       },
-      timeout: Duration.seconds(500),
+      timeout: Duration.seconds(900),
       memorySize: 1700,
       architecture: aws_lambda.Architecture.ARM_64,
       retryAttempts: 0,
@@ -73,7 +84,8 @@ export class RaptorStatsStack extends Stack {
       'RaptorStats',
       lambdaProps,
     )
-    parquetBucket.grantReadWrite(raptorStats)
+    dataBucket.grantReadWrite(raptorStats)
+    dataBucketDev.grantReadWrite(raptorStats)
     webBucket.grantWrite(raptorStats)
     eventRuleRaptorStats.addTarget(
       new aws_events_targets.LambdaFunction(raptorStats),
@@ -87,12 +99,13 @@ export class RaptorStatsStack extends Stack {
         }),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 3000,
+        memorySize: 3008,
       },
     })
 
     pveRating.grantInvoke(raptorStats)
-    parquetBucket.grantReadWrite(pveRating)
+    dataBucket.grantReadWrite(pveRating)
+    dataBucketDev.grantReadWrite(pveRating)
     webBucket.grantWrite(pveRating)
 
     const spreadsheet = new lambda.DockerImageFunction(this, 'Spreadsheet', {
@@ -102,37 +115,59 @@ export class RaptorStatsStack extends Stack {
           cmd: ['Spreadsheet.lambda_handler.handler'],
         }),
         functionName: 'Spreadsheet',
-        timeout: Duration.seconds(900),
-        memorySize: 700,
+        timeout: Duration.seconds(500),
+        memorySize: 600,
       },
     })
 
-    spreadsheet.grantInvoke(pveRating)
     spreadsheet.grantInvoke(raptorStats)
-    parquetBucket.grantRead(spreadsheet)
+    spreadsheet.grantInvoke(pveRating)
+    dataBucket.grantRead(spreadsheet)
+    dataBucketDev.grantRead(spreadsheet)
 
     const exceptionTopic = new aws_sns.Topic(this, 'lambda-exception-topic', {
       displayName: 'lambda-exception-topic',
       topicName: 'lambda-exception-topic',
     })
 
-    ;[
-      { fun: raptorStats, name: 'raptorStats' },
-      { fun: pveRating, name: 'pveRating' },
-      { fun: spreadsheet, name: 'Spreadsheet' },
-    ].forEach(({ fun, name }) => {
+    ;[raptorStats, pveRating, spreadsheet].forEach((fun) => {
       fun
         .metricErrors({
           period: Duration.minutes(1),
         })
-        .createAlarm(this, `${name.toLowerCase()}-exception-alarm`, {
-          threshold: 1,
-          evaluationPeriods: 1,
-          alarmDescription: `Exception on ${name}`,
-          treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
-        })
+        .createAlarm(
+          this,
+          `${fun.functionName.toLowerCase()}-exception-alarm`,
+          {
+            threshold: 1,
+            evaluationPeriods: 1,
+            alarmDescription: `Exception on ${fun.functionName}`,
+            treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
+          },
+        )
         .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
-      gcpSecret.grantRead(fun)
+      if (fun.functionName !== 'Spreadsheet') {
+        fun.logGroup.addMetricFilter(`-log-filter`, {
+          filterPattern: {
+            logPatternString: 'not casted cols',
+          },
+          metricNamespace: fun.functionName,
+          metricName: `${fun.functionName}-col-alarm`,
+          metricValue: '1',
+        })
+        fun
+          .metricErrors({
+            period: Duration.minutes(1),
+          })
+          .createAlarm(this, `${fun.functionName.toLowerCase()}-col-alarm`, {
+            threshold: 1,
+            evaluationPeriods: 1,
+            alarmDescription: `Exception on ${fun.functionName}`,
+            treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
+          })
+          .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
+        gcpSecret.grantRead(fun)
+      }
     })
   }
 }

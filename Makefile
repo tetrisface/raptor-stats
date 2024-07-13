@@ -1,3 +1,5 @@
+DATA_BUCKET := s3://replays-processing/
+
 .PHONY: requirements setup notebook-to-py run-dev run install install-run tail upload download backup
 
 requirements:
@@ -47,16 +49,16 @@ tail:
 	aws logs tail /aws/lambda/RaptorStats --follow & aws logs tail /aws/lambda/PveRating --follow & aws logs tail /aws/lambda/Spreadsheet --follow
 
 upload:
-	aws s3 cp lambdas/replays.parquet s3://raptor-stats-parquet/replays.parquet
-	aws s3 cp lambdas/replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet
+	aws s3 cp lambdas/replays.parquet $(DATA_BUCKET)replays.parquet
+	aws s3 cp lambdas/replays_gamesettings.parquet $(DATA_BUCKET)replays_gamesettings.parquet
 
 download:
-	aws s3 cp s3://raptor-stats-parquet/replays.parquet lambdas/
-	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet lambdas/
+	aws s3 cp $(DATA_BUCKET)replays.parquet lambdas/
+	aws s3 cp $(DATA_BUCKET)replays_gamesettings.parquet lambdas/
 
 backup:
-	aws s3 cp s3://raptor-stats-parquet/replays.parquet s3://raptor-stats-parquet/replays.parquet.backup.`date +%d`
-	aws s3 cp s3://raptor-stats-parquet/replays_gamesettings.parquet s3://raptor-stats-parquet/replays_gamesettings.parquet.backup.`date +%d`
+	aws s3 cp $(DATA_BUCKET)replays.parquet $(DATA_BUCKET)replays.parquet.backup.`date +%d`
+	aws s3 cp $(DATA_BUCKET)replays_gamesettings.parquet $(DATA_BUCKET)replays_gamesettings.parquet.backup.`date +%d`
 
 update:
 	bunx npm-check-updates -i

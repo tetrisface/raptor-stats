@@ -5,17 +5,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "pve_rating",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "PveRating.pve_rating",
-      "cwd": "${workspaceFolder}/lambdas",
-      "console": "integratedTerminal",
-      "env": {
-        "ENV": "dev"
-      }
-    },
-    {
       "name": "raptor_stats",
       "type": "debugpy",
       "request": "launch",
@@ -23,7 +12,21 @@
       "cwd": "${workspaceFolder}/lambdas",
       "console": "integratedTerminal",
       "env": {
-        "ENV": "dev"
+        "ENV": "dev",
+        "DATA_BUCKET": "s3://replays-processing/"
+      }
+    },
+    {
+      "name": "pve_rating",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "PveRating.pve_rating",
+      "cwd": "${workspaceFolder}/lambdas",
+      "console": "integratedTerminal",
+      "env": {
+        "ENV": "dev",
+        "DATA_BUCKET": "s3://replays-processing/"
+        // "WRITE_DATA_BUCKET": "s3://replays-processing-dev/"
       }
     }
   ]

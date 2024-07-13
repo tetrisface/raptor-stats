@@ -11,11 +11,12 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 
 replay_root_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
-bucket_path = 's3://raptor-stats-parquet/'
+READ_DATA_BUCKET = os.environ.get('READ_DATA_BUCKET', os.environ['DATA_BUCKET'])
+WRITE_DATA_BUCKET = os.environ.get('WRITE_DATA_BUCKET', os.environ['DATA_BUCKET'])
 
 
 def get_df_s3(path):
-    s3_path = bucket_path + path
+    s3_path = os.path.join(READ_DATA_BUCKET, path)
     logger.info(f'fetching from "{s3_path}"')
     _df = pl.read_parquet(s3_path)
     if dev:
@@ -27,7 +28,8 @@ def get_df_s3(path):
 def get_df(path):
     if dev and not os.path.exists(path):
         return get_df_s3(path)
-    path = ('' if dev else bucket_path) + path
+    if not dev:
+        path = os.path.join(READ_DATA_BUCKET, path)
     df = pl.read_parquet(path)
     logger.info(f'fetched {len(df)} from "{path}"')
     return df
