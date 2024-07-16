@@ -323,7 +323,6 @@ gamesettings_scav = {
 }
 
 higher_harder = {
-    # 'ai_incomemultiplier', # barbarianai?
     'maxunits',
     'multiplier_buildtimecost',
     'multiplier_energycost',

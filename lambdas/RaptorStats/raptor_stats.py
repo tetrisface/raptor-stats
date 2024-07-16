@@ -100,7 +100,6 @@ def main():
     if n_total_received_rows > 0:
         store_df(games, replays_root_file_name)
 
-    logger.info('Adding computed columns')
     games = (
         add_computed_cols(games)
         .filter(pl.col('draw') == False)
@@ -117,9 +116,9 @@ def main():
 
     previousPlayerWinStartTime = (
         games.filter(
-            ('raptors' & pl.col('raptors_win').eq(False))
+            'barbarian' & pl.col('barbarian_win').eq(False)
+            | ('raptors' & pl.col('raptors_win').eq(False))
             | ('scavengers' & pl.col('scavengers_win').eq(False))
-            | ('barbarian' & pl.col('barbarian_win').eq(False))
         )
         .select(pl.col('startTime'))
         .max()

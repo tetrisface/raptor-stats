@@ -65,8 +65,6 @@ def main(event):
         with fs.open(parquet_path, mode='rb') as f:
             df = pl.read_parquet(f)
 
-    # df = pl.read_parquet(parquet_path)
-
     logger.info(f'pushing {len(df)} to {sheet_name}')
     worksheet.update(
         values=columns + df.rows(),

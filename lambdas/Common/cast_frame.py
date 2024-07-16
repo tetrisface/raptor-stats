@@ -57,7 +57,7 @@ string_columns = {
 }
 
 int_columns = {
-    'ai_incomemultiplier',
+    'ai_incomemultiplier',  # todo delete
     'air_rework',
     'allowpausegameplay',
     'allowuserwidgets',
@@ -237,18 +237,22 @@ def awards(row):
     for team in row['AllyTeams']:
         for player in team['Players']:
             if 'Players' in team:
-                ids_names[player['teamId']] = player['name']
+                ids_names[player['teamId']] = player['userId']
 
     damage_award = None
     eco_award = None
 
     try:
-        damage_award = ids_names[row['awards']['fightingUnitsDestroyed'][0]['teamId']]
+        damage_award = np.uint32(
+            ids_names[row['awards']['fightingUnitsDestroyed'][0]['teamId']]
+        )
     except KeyError:
         pass
 
     try:
-        eco_award = ids_names[row['awards']['mostResourcesProduced']['teamId']]
+        eco_award = np.uint32(
+            ids_names[row['awards']['mostResourcesProduced']['teamId']]
+        )
     except KeyError:
         pass
 
@@ -275,6 +279,14 @@ def add_computed_cols(_df):
         )
         .list.all()
     ).with_columns(
+        barbarian=pl.col('AllyTeams')
+        .list.eval(
+            pl.element()
+            .struct['AIs']
+            .list.eval(pl.element().struct['shortName'])
+            .flatten()
+        )
+        .list.contains('BARb'),
         raptors=pl.col('AllyTeams')
         .list.eval(
             pl.element()
@@ -291,14 +303,6 @@ def add_computed_cols(_df):
             .flatten()
         )
         .list.contains('ScavengersAI'),
-        barbarian=pl.col('AllyTeams')
-        .list.eval(
-            pl.element()
-            .struct['AIs']
-            .list.eval(pl.element().struct['shortName'])
-            .flatten()
-        )
-        .list.contains('BARb'),
         is_player_ai_mixed=(pl.col('AllyTeams').list.len() > 2)
         | pl.col('AllyTeams')
         .list.eval(
@@ -310,17 +314,34 @@ def add_computed_cols(_df):
         | pl.col('AllyTeams').list.eval(~pl.element().struct['winningTeam']).list.all(),
         winners=pl.col('AllyTeams').list.eval(
             pl.when(pl.element().struct['winningTeam'])
-            .then(pl.element().struct['Players'].list.eval(pl.element().struct['name']))
+            .then(
+                pl.element()
+                .struct['Players']
+                .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
+            )
             .flatten()
             .drop_nulls()
         ),
         players=pl.col('AllyTeams').list.eval(
             pl.element()
             .struct['Players']
-            .list.eval(pl.element().struct['name'])
+            .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
             .flatten()
             .drop_nulls()
         ),
+        barbarian_win=pl.col('AllyTeams')
+        .list.eval(
+            pl.when(pl.element().struct['winningTeam'])
+            .then(
+                pl.element()
+                .struct['AIs']
+                .list.eval(pl.element().struct['shortName'] == 'BARb')
+            )
+            .flatten()
+            .drop_nulls()
+            .any()
+        )
+        .flatten(),
         raptors_win=pl.col('AllyTeams')
         .list.eval(
             pl.when(pl.element().struct['winningTeam'])
@@ -347,19 +368,6 @@ def add_computed_cols(_df):
             .any()
         )
         .flatten(),
-        barbarian_win=pl.col('AllyTeams')
-        .list.eval(
-            pl.when(pl.element().struct['winningTeam'])
-            .then(
-                pl.element()
-                .struct['AIs']
-                .list.eval(pl.element().struct['shortName'] == 'BARb')
-            )
-            .flatten()
-            .drop_nulls()
-            .any()
-        )
-        .flatten(),
     )
 
     if 'AllyTeamsList' in _df.columns:
@@ -376,41 +384,56 @@ def add_computed_cols(_df):
         )
 
         _df = _df.with_columns(
-            pl.col('Map').struct.field('scriptName').alias('Map Name'),
-            barbarian_handicap=pl.when('barbarian')
+            pl.col('Map')
+            .struct.field('scriptName')
+            .str.replace(
+                r'(?i)[_\s]+[v\d\.]+\w*$',
+                '',
+            )
+            .alias('Map Name'),
+            pl.when('barbarian')
             .then(
+                (
+                    pl.col('AllyTeams')
+                    .list.eval(
+                        pl.element()
+                        .struct['AIs']
+                        .list.eval(
+                            pl.when(pl.element().struct['shortName'] == 'BARb').then(
+                                pl.element().struct['handicap']
+                            )
+                        )
+                        .flatten()
+                        .drop_nulls()
+                        .mean()
+                    )
+                    .flatten()
+                ).round()
+            )
+            .otherwise(None)
+            .cast(pl.UInt8)
+            .alias('Barbarian Handicap'),
+            (
                 pl.col('AllyTeams')
                 .list.eval(
                     pl.element()
                     .struct['AIs']
                     .list.eval(
-                        pl.when(pl.element().struct['shortName'] == 'BARb').then(
-                            pl.element().struct['handicap']
-                        )
+                        pl.when(pl.element().struct['shortName'] == 'BARb')
+                        .then(1)
+                        .otherwise(0)
                     )
                     .flatten()
-                    .drop_nulls()
-                    .mean()
+                    .sum()
                 )
                 .flatten()
-            )
-            .otherwise(None),
-            barbarian_per_player=pl.col('AllyTeams')
-            .list.eval(
-                pl.element()
-                .struct['AIs']
-                .list.eval(
-                    pl.when(pl.element().struct['shortName'] == 'BARb')
-                    .then(1)
-                    .otherwise(0)
-                )
+                / pl.col('AllyTeams')
+                .list.eval(pl.element().struct['Players'].list.len().sum())
                 .flatten()
-                .sum()
             )
-            .flatten()
-            / pl.col('AllyTeams')
-            .list.eval(pl.element().struct['Players'].list.len().sum())
-            .flatten(),
+            .round(1)
+            .cast(pl.Float32)
+            .alias('Barbarian Per Player'),
             has_player_handicap=pl.col('AllyTeams')
             .list.eval(
                 pl.element()
@@ -441,8 +464,8 @@ def cast_frame(_df):
             'AllyTeamsList',
             'awards',
             'barbarian',
-            'barbarian_handicap',
-            'barbarian_per_player',
+            'Barbarian Handicap',
+            'Barbarian Per Player',
             'barbarian_win',
             'draw',
             'fetch_success',
@@ -560,6 +583,9 @@ def cast_frame(_df):
         pl.col('evocomleveluprate').fill_null(5).alias('evocomleveluprate')
         if 'evocomleveluprate' in _df.columns
         else None,
+        pl.col('evocomlevelcap').fill_null(10).alias('evocomlevelcap')
+        if 'evocomlevelcap' in _df.columns
+        else None,
         *[
             pl.col(x).fill_null(0)
             for x in int_columns
@@ -590,8 +616,5 @@ def cast_frame(_df):
             if x in _df.columns
         ],
     )
-    # _df[[s.name for s in _df if s.null_count() > 0] + ['startTime']].sort(
-    #     'startTime'
-    # ).glimpse()
 
     return _df

@@ -49,3 +49,14 @@ def get_secret():
         raise e
 
     return get_secret_value_response['SecretString']
+
+
+def interpolate(value, in_min, in_max, out_min, out_max):
+    # Clamp the value within the input range
+    value = max(in_min, min(value, in_max))
+
+    # Calculate the interpolation factor
+    t = (value - in_min) / (in_max - in_min)
+
+    # Calculate and return the interpolated result
+    return out_min + t * (out_max - out_min)

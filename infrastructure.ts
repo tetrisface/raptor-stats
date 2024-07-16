@@ -24,7 +24,6 @@ export class RaptorStatsStack extends Stack {
     super(scope, id, props)
 
     const DATA_BUCKET = 'replays-processing'
-
     const bucketProps = {
       bucketName: DATA_BUCKET,
       blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
@@ -33,8 +32,8 @@ export class RaptorStatsStack extends Stack {
       encryption: aws_s3.BucketEncryption.S3_MANAGED,
       versioned: false,
     }
-    const dataBucket = new aws_s3.Bucket(this, DATA_BUCKET, bucketProps)
 
+    const dataBucket = new aws_s3.Bucket(this, DATA_BUCKET, bucketProps)
     const dataBucketDev = new aws_s3.Bucket(this, DATA_BUCKET + '-dev', {
       ...bucketProps,
       ...{
@@ -99,7 +98,7 @@ export class RaptorStatsStack extends Stack {
         }),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 3008,
+        memorySize: 1500,
       },
     })
 
@@ -173,8 +172,8 @@ export class RaptorStatsStack extends Stack {
 }
 const env = { account: '190920611368', region: 'eu-north-1' }
 const app = new App()
-new WebStack(app, 'WebStack', { env })
-new RaptorStatsStack(app, 'RaptorStatsStack', {
+new WebStack(app, 'WebStack', { env }) // NOSONAR
+const stackProps = {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */
@@ -185,5 +184,6 @@ new RaptorStatsStack(app, 'RaptorStatsStack', {
    * want to deploy the stack to. */
   env,
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
-})
+}
+new RaptorStatsStack(app, 'RaptorStatsStack', stackProps) // NOSONAR
 app.synth()
