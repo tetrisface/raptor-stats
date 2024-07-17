@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 import warnings
 
 import gspread
@@ -28,13 +29,23 @@ def get_or_create_worksheet(spreadsheet, sheet_name, rows=1, cols=1, index=0):
     return worksheet
 
 
+def number_to_column_letter(n):
+    result = ''
+    while n >= 0:
+        n, remainder = divmod(n, 26)
+        result = chr(remainder + 65) + result
+        n -= 1
+    return result
+
+
 def main(event):
     _id = event['id']
     sheet_name = event['sheet_name']
-    columns = event['columns']
+    column_rows = event['columns']
     parquet_path = event['parquet_path']
     batch_requests = event['batch_requests']
     clear = event['clear']
+    notes = event['notes']
 
     if dev:
         gc = gspread.service_account()
@@ -67,9 +78,16 @@ def main(event):
 
     logger.info(f'pushing {len(df)} to {sheet_name}')
     worksheet.update(
-        values=columns + df.rows(),
+        values=column_rows + df.rows(),
         value_input_option=gspread.utils.ValueInputOption.user_entered,
     )
+
+    logger.info(f'clearing notes {len(column_rows[0])} columns')
+    if len(column_rows) > 0:
+        worksheet.clear_note(1, 1, len(column_rows), len(column_rows[0]))
+
+    if len(notes) > 0:
+        worksheet.update_notes(notes)
 
     if len(batch_requests) > 0:
         spreadsheet.batch_update({'requests': batch_requests})

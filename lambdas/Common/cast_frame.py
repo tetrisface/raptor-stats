@@ -233,29 +233,40 @@ def drop_null_empty_cols(_df):
 
 
 def awards(row):
-    ids_names = {}
-    for team in row['AllyTeams']:
-        for player in team['Players']:
-            if 'Players' in team:
-                ids_names[player['teamId']] = player['userId']
-
     damage_award = None
     eco_award = None
+
+    if not row.get('AllyTeams'):
+        return {
+            'damage_award': damage_award,
+            'eco_award': eco_award,
+        }
+
+    ids_names = {}
+    if row.get('AllyTeams') is not None:
+        for team in row.get('AllyTeams', []):
+            try:
+                for player in team.get('Players', []):
+                    if 'teamId' in player and 'userId' in player:
+                        ids_names[player['teamId']] = player['userId']
+            except Exception:
+                pass
 
     try:
         damage_award = np.uint32(
             ids_names[row['awards']['fightingUnitsDestroyed'][0]['teamId']]
         )
-    except KeyError:
+    except Exception:
         pass
 
     try:
         eco_award = np.uint32(
             ids_names[row['awards']['mostResourcesProduced']['teamId']]
         )
-    except KeyError:
+    except Exception:
         pass
 
+    logger.debug(f'awards returned {damage_award} {eco_award}')
     return {
         'damage_award': damage_award,
         'eco_award': eco_award,
@@ -263,7 +274,7 @@ def awards(row):
 
 
 def add_computed_cols(_df):
-    logger.info('Adding computed columns')
+    logger.info('Filtering games by AllyTeamsList info')
     _df = _df.filter(
         pl.col('AllyTeams')
         .list.eval(
@@ -278,7 +289,32 @@ def add_computed_cols(_df):
             .drop_nulls()
         )
         .list.all()
-    ).with_columns(
+        & pl.col('durationMs').gt(0)
+        & pl.col('AllyTeams').list.eval(pl.element().struct['winningTeam']).list.any()
+        & pl.col('AllyTeams').list.len().lt(3)
+        & pl.col('AllyTeams')
+        .list.eval(
+            pl.element().struct['Players'].list.len().eq(0)
+            | pl.element().struct['AIs'].list.len().eq(0)
+        )
+        .list.all()
+    )
+
+    if 'AllyTeamsList' in _df.columns:
+        _df = _df.filter(
+            ~pl.col('AllyTeams')
+            .list.eval(
+                pl.element()
+                .struct['Players']
+                .list.eval(pl.element().struct['handicap'] > 0)
+                .flatten()
+                .any()
+            )
+            .flatten()
+        )
+
+    logger.info('Adding computed columns')
+    _df = _df.with_columns(
         barbarian=pl.col('AllyTeams')
         .list.eval(
             pl.element()
@@ -303,32 +339,6 @@ def add_computed_cols(_df):
             .flatten()
         )
         .list.contains('ScavengersAI'),
-        is_player_ai_mixed=(pl.col('AllyTeams').list.len() > 2)
-        | pl.col('AllyTeams')
-        .list.eval(
-            (pl.element().struct['Players'].list.len() > 0)
-            & (pl.element().struct['AIs'].list.len() > 0)
-        )
-        .list.any(),
-        draw=(pl.col('durationMs') == 0)
-        | pl.col('AllyTeams').list.eval(~pl.element().struct['winningTeam']).list.all(),
-        winners=pl.col('AllyTeams').list.eval(
-            pl.when(pl.element().struct['winningTeam'])
-            .then(
-                pl.element()
-                .struct['Players']
-                .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
-            )
-            .flatten()
-            .drop_nulls()
-        ),
-        players=pl.col('AllyTeams').list.eval(
-            pl.element()
-            .struct['Players']
-            .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
-            .flatten()
-            .drop_nulls()
-        ),
         barbarian_win=pl.col('AllyTeams')
         .list.eval(
             pl.when(pl.element().struct['winningTeam'])
@@ -376,7 +386,8 @@ def add_computed_cols(_df):
                 pl.col('AllyTeams').is_not_null() & pl.col('awards').is_not_null()
             ).with_columns(
                 pl.struct('AllyTeams', 'awards')
-                .map_elements(awards, return_dtype=pl.Struct)
+                .drop_nulls()
+                .map_elements(awards, return_dtype=pl.Struct, skip_nulls=True)
                 .alias('damage_eco_award')
             )['id', 'damage_eco_award'],
             on='id',
@@ -434,15 +445,23 @@ def add_computed_cols(_df):
             .round(1)
             .cast(pl.Float32)
             .alias('Barbarian Per Player'),
-            has_player_handicap=pl.col('AllyTeams')
-            .list.eval(
+            winners=pl.col('AllyTeams').list.eval(
+                pl.when(pl.element().struct['winningTeam'])
+                .then(
+                    pl.element()
+                    .struct['Players']
+                    .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
+                )
+                .flatten()
+                .drop_nulls()
+            ),
+            players=pl.col('AllyTeams').list.eval(
                 pl.element()
                 .struct['Players']
-                .list.eval(pl.element().struct['handicap'] > 0)
+                .list.eval(pl.element().struct['userId'].cast(pl.UInt32))
                 .flatten()
-                .any()
-            )
-            .flatten(),
+                .drop_nulls()
+            ),
         )
     return _df
 
@@ -467,7 +486,7 @@ def cast_frame(_df):
             'Barbarian Handicap',
             'Barbarian Per Player',
             'barbarian_win',
-            'draw',
+            'draw',  # TODO delete
             'fetch_success',
             'id',
             'is_player_ai_mixed',
@@ -578,6 +597,7 @@ def cast_frame(_df):
                 logger.error(
                     f'Could not cast decimal column "{col}" to "{decimal_type}"'
                 )
+
     _df = _df.with_columns(
         pl.col(in_df_str_cols).fill_null(''),
         pl.col('evocomleveluprate').fill_null(5).alias('evocomleveluprate')

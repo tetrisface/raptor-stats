@@ -26,6 +26,7 @@
       "env": {
         "ENV": "dev",
         "DATA_BUCKET": "s3://replays-processing/"
+        // "LOG_LEVEL": "DEBUG"
         // "WRITE_DATA_BUCKET": "s3://replays-processing-dev/"
       }
     }

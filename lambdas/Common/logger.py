@@ -29,15 +29,22 @@ def lambda_handler_decorator(func):
 
 
 def get_logger(function_name=''):
+    log_level_str = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    log_level_str = 'INFO' if log_level_str.startswith('I') else log_level_str
+    log_level = getattr(
+        logging,
+        'DEBUG' if log_level_str.startswith('D') else log_level_str,
+    )
+
     if os.environ.get('ENV', 'prod') == 'dev':
         logging.basicConfig(
             stream=sys.stdout,
-            level=logging.INFO,
+            level=log_level,
         )
 
     _logger = logging.getLogger()
+    _logger.setLevel(log_level)
 
-    _logger.setLevel(logging.INFO)
     function_name = (
         function_name if function_name else os.environ.get('LAMBDA_NAME', '')
     )

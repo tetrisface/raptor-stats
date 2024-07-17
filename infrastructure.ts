@@ -72,7 +72,7 @@ export class RaptorStatsStack extends Stack {
         DATA_BUCKET: `s3://${dataBucket.bucketName}/`,
       },
       timeout: Duration.seconds(900),
-      memorySize: 1700,
+      memorySize: 1900,
       architecture: aws_lambda.Architecture.ARM_64,
       retryAttempts: 0,
       maxEventAge: Duration.minutes(5),
@@ -98,7 +98,7 @@ export class RaptorStatsStack extends Stack {
         }),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 1500,
+        memorySize: 1300,
       },
     })
 

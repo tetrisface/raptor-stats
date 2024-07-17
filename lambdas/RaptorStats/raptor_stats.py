@@ -100,11 +100,7 @@ def main():
     if n_total_received_rows > 0:
         store_df(games, replays_root_file_name)
 
-    games = (
-        add_computed_cols(games)
-        .filter(pl.col('draw') == False)
-        .rename({'AllyTeams': 'AllyTeamsList'})
-    )
+    games = add_computed_cols(games).rename({'AllyTeams': 'AllyTeamsList'})
 
     logger.info('Fetching replay details')
     replay_details_cache = get_df(replay_details_file_name)
@@ -642,17 +638,6 @@ def main():
     )
 
     return 'done'
-
-
-def links_cell(url_pairs):
-    cell = f'=ifna(hyperlink("{url_pairs[0][0]}";"[{url_pairs[0][1]+1}]")'
-    if len(url_pairs) > 1:
-        cell += (
-            '; "'
-            + ', '.join([f'[{index+1}] {url}' for url, index in url_pairs[1:]])
-            + '"'
-        )
-    return cell + ')'
 
 
 def grouped(to_group_df):

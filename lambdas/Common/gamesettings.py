@@ -330,6 +330,7 @@ higher_harder = {
     'multiplier_maxvelocity',
     'multiplier_metalcost',
     'nuttyb_hp',
+    # 'no_comtrans', # doesn't make big enough difference
     'raptor_difficulty',
     'raptor_firstwavesboost',
     # 'raptor_raptorstart', # uncertain
@@ -349,6 +350,7 @@ lower_harder = {
     'commanderbuildersbuildpower',
     'commanderbuildersenabled',
     'commanderbuildersrange',
+    'comrespawn',
     'disable_fogofwar',
     'evocom',
     'evocomleveluprate',
@@ -379,7 +381,7 @@ lower_harder = {
     'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
     'raptor_graceperiodmult',
     'releasecandidates',
-    'scav_bosstimemult',
+    'scav_bosstimemult',  # probably harder
     'scav_graceperiodmult',
     'startenergy',
     'startenergystorage',
@@ -394,13 +396,58 @@ possible_tweak_columns = (
 )
 
 gamesetting_equal_columns = set(possible_tweak_columns) | {
-    'comrespawn',
-    'evocomlevelupmethod',
-    'lootboxes_density',
-    'no_comtrans',
+    'evocomlevelupmethod',  # uncertain
+    'lootboxes_density',  # todo add enum for lower harder comparison
 }
 
 for gamesetting in gamesettings.values():
     gamesetting_equal_columns = gamesetting_equal_columns | set(gamesetting.keys())
 
 gamesetting_equal_columns = gamesetting_equal_columns - lower_harder - higher_harder
+
+barbarian_gamesetting_equal_columns = {
+    'evocom',
+    'evocomlevelcap',
+    'evocomlevelupmethod',
+    'evocomleveluprate',
+    'evocomxpmultiplier',
+    'experimentalextraunits',
+    'experimentallegionfaction',
+    'forceallunits',
+    'lootboxes_density',
+    'lootboxes',
+    'multiplier_builddistance',
+    'multiplier_buildpower',
+    'multiplier_buildtimecost',
+    'multiplier_energyconversion',
+    'multiplier_energycost',
+    'multiplier_energyproduction',
+    'multiplier_losrange',
+    'multiplier_maxdamage',
+    'multiplier_maxvelocity',
+    'multiplier_metalcost',
+    'multiplier_metalextraction',
+    'multiplier_radarrange',
+    'multiplier_resourceincome',
+    'multiplier_shieldpower',
+    'multiplier_turnrate',
+    'multiplier_weapondamage',
+    'multiplier_weaponrange',
+    'ruins_civilian_disable',
+    'ruins_density',
+    'ruins_only_t1',
+    'ruins',
+    'startenergy',
+    'startenergystorage',
+    'startmetal',
+    'startmetalstorage',
+    'unit_restrictions_noair',
+    'unit_restrictions_noconverters',
+    'unit_restrictions_noendgamelrpc',
+    'unit_restrictions_noextractors',
+    'unit_restrictions_nolrpc',
+    'unit_restrictions_nonukes',
+    'unit_restrictions_notacnukes',
+    'unit_restrictions_notech2',
+    'unit_restrictions_notech3',
+}

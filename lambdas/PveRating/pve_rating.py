@@ -29,9 +29,13 @@ from Common.gamesettings import (
     higher_harder,
     lower_harder,
     possible_tweak_columns,
+    barbarian_gamesetting_equal_columns,
 )
 from Common.logger import get_logger
-from Spreadsheet.spreadsheet import get_or_create_worksheet
+from Spreadsheet.spreadsheet import (
+    get_or_create_worksheet,
+    number_to_column_letter,
+)
 
 logger = get_logger()
 
@@ -52,27 +56,19 @@ b = np.array(lobby_size_teammates_completion_fit_output)
 
 
 def main():
-    _games = (
-        add_computed_cols(cast_frame(get_df(replay_details_file_name)))
-        .filter(
-            ~pl.col('is_player_ai_mixed')
-            & pl.col('has_player_handicap').eq(False)
-            & pl.col('draw').eq(False)
-        )
-        .drop('is_player_ai_mixed', 'has_player_handicap', 'draw')
-    )
+    _games = add_computed_cols(cast_frame(get_df(replay_details_file_name)))
 
     json_data = {
         'pve_ratings': {
-            'barbarian': process_games(
+            'BarbarianAI': process_games(
                 _games.filter('barbarian' & ~pl.col('raptors') & ~pl.col('scavengers')),
                 'Barbarian',
             ),
-            'raptors': process_games(
+            'RaptorsAI': process_games(
                 _games.filter('raptors' & ~pl.col('scavengers') & ~pl.col('barbarian')),
                 'Raptors',
             ),
-            'scavengers': process_games(
+            'ScavengersAI': process_games(
                 _games.filter('scavengers' & ~pl.col('raptors') & ~pl.col('barbarian')),
                 'Scavengers',
             ),
@@ -92,54 +88,11 @@ def process_games(games, prefix):  # NOSONAR
     if prefix == 'Barbarian':
         ai_name = 'BarbarianAI'
         ai_win_column = 'barbarian_win'
-        ai_gamesetting_equal_columns = {
-            'comrespawn',
-            'evocom',
-            'evocomlevelcap',
-            'evocomlevelupmethod',
-            'evocomleveluprate',
-            'evocomxpmultiplier',
-            'experimentalextraunits',
-            'experimentallegionfaction',
-            'forceallunits',
-            'lootboxes_density',
-            'lootboxes',
-            'multiplier_builddistance',
-            'multiplier_buildpower',
-            'multiplier_buildtimecost',
-            'multiplier_energyconversion',
-            'multiplier_energycost',
-            'multiplier_energyproduction',
-            'multiplier_losrange',
-            'multiplier_maxdamage',
-            'multiplier_maxvelocity',
-            'multiplier_metalcost',
-            'multiplier_metalextraction',
-            'multiplier_radarrange',
-            'multiplier_resourceincome',
-            'multiplier_shieldpower',
-            'multiplier_turnrate',
-            'multiplier_weapondamage',
-            'multiplier_weaponrange',
-            'ruins_civilian_disable',
-            'ruins_density',
-            'ruins_only_t1',
-            'ruins',
-            'startenergy',
-            'startenergystorage',
-            'startmetal',
-            'startmetalstorage',
-            'unit_restrictions_noair',
-            'unit_restrictions_noconverters',
-            'unit_restrictions_noendgamelrpc',
-            'unit_restrictions_noextractors',
-            'unit_restrictions_nolrpc',
-            'unit_restrictions_nonukes',
-            'unit_restrictions_notacnukes',
-            'unit_restrictions_notech2',
-            'unit_restrictions_notech3',
-        } | set(possible_tweak_columns)
+        ai_gamesetting_equal_columns = barbarian_gamesetting_equal_columns | set(
+            possible_tweak_columns
+        )
         ai_gamesetting_lower_harder = {
+            'comrespawn',
             'disable_fogofwar',
         }
         ai_gamesetting_higher_harder = {'Barbarian Per Player', 'Barbarian Handicap'}
@@ -254,13 +207,19 @@ def process_games(games, prefix):  # NOSONAR
         .agg(
             pl.len().alias('n_games'),
             pl.col('Player').is_in('winners').mean().alias('Win Rate'),
-            pl.when(pl.col('Player').is_in('winners'))
+            pl.when(
+                pl.col('Player').is_in('winners')
+                & pl.col('players_extended').list.len().gt(1)
+            )
             .then(award_sum_expression)
             .otherwise(None)
             .drop_nulls()
             .mean()
             .alias('Award Rate'),
-            pl.when(pl.col('Player').is_in('winners'))
+            pl.when(
+                pl.col('Player').is_in('winners')
+                & pl.col('players_extended').list.len().gt(1)
+            )
             .then(award_sum_expression * (pl.col('players_extended').list.len() - 1))
             .otherwise(None)
             .drop_nulls()
@@ -269,8 +228,9 @@ def process_games(games, prefix):  # NOSONAR
         )
     )
 
-    # merge/coalesce players from harder into easier games
-    logger.info('Merg/coalesce players from harder games into easier games')
+    logger.info(
+        'Merging/extending players winning harder games into easier games and losers into harder games'
+    )
     not_null_compare_merge_columns = (
         ai_gamesetting_equal_columns
         | ai_gamesetting_lower_harder
@@ -293,7 +253,7 @@ def process_games(games, prefix):  # NOSONAR
         _ai_gamesetting_higher_harder = ai_gamesetting_higher_harder
         _ai_gamesetting_lower_harder = ai_gamesetting_lower_harder
 
-        if game['evocom'] == 0:
+        if game.get('evocom') == 0:
             _ai_gamesetting_equal_columns = {
                 x for x in _ai_gamesetting_equal_columns if 'evocom' not in x
             }
@@ -305,7 +265,7 @@ def process_games(games, prefix):  # NOSONAR
                 for x in _ai_gamesetting_lower_harder
                 if 'evocom' not in x or x == 'evocom'
             }
-        if game['commanderbuildersenabled'] == 'disabled':
+        if game.get('commanderbuildersenabled') == 'disabled':
             _ai_gamesetting_equal_columns = {
                 x for x in _ai_gamesetting_equal_columns if 'commanderbuilders' not in x
             }
@@ -317,7 +277,7 @@ def process_games(games, prefix):  # NOSONAR
                 for x in _ai_gamesetting_lower_harder
                 if 'commanderbuilders' not in x or x == 'commanderbuildersenabled'
             }
-        if game['assistdronesenabled'] == 'disabled':
+        if game.get('assistdronesenabled') == 'disabled':
             _ai_gamesetting_equal_columns = {
                 x for x in _ai_gamesetting_equal_columns if 'assistdrones' not in x
             }
@@ -330,7 +290,7 @@ def process_games(games, prefix):  # NOSONAR
                 if 'assistdrones' not in x or x == 'assistdronesenabled'
             }
 
-        if game['nuttyb_hp'] is None:
+        if game.get('nuttyb_hp') is None:
             _ai_gamesetting_higher_harder -= {'nuttyb_hp'}
 
         merge_games = games.filter(
@@ -524,45 +484,42 @@ def process_games(games, prefix):  # NOSONAR
     group_export_df = (
         group_df_sample.with_columns(
             pl.col('winners')
-            .map_elements(
-                lambda _col: ', '.join(
-                    _col.replace_strict(
-                        user_ids_names, return_dtype=pl.String
-                    ).to_list()
-                ),
-                skip_nulls=True,
-                return_dtype=pl.String,
+            .list.eval(
+                pl.element().replace_strict(user_ids_names),
             )
+            .list.join(', ')
             .alias('Winners'),
-            pl.col('Players').map_elements(
-                lambda _col: ', '.join(
-                    _col.replace_strict(
-                        user_ids_names, return_dtype=pl.String
-                    ).to_list()
-                ),
-                skip_nulls=True,
-                return_dtype=pl.String,
-            ),
-            pl.col('Win Replays').map_elements(
-                lambda _col: ', '.join(_col.cast(str).to_list()),
-                skip_nulls=True,
-                return_dtype=pl.String,
-            ),
-            pl.col('Merged Win Replays').map_elements(
-                lambda _col: ', '.join(_col.cast(str).to_list()),
-                skip_nulls=True,
-                return_dtype=pl.String,
-            ),
-            pl.col('Loss Replays').map_elements(
-                lambda _col: ', '.join(_col.cast(str).to_list()),
-                skip_nulls=True,
-                return_dtype=pl.String,
-            ),
-            pl.col('Merged Loss Replays').map_elements(
-                lambda _col: ', '.join(_col.cast(str).to_list()),
-                skip_nulls=True,
-                return_dtype=pl.String,
-            ),
+            pl.col('Players')
+            .list.eval(pl.element().replace_strict(user_ids_names))
+            .list.join(', '),
+            (
+                pl.lit('=hyperlink("https://bar-rts.com/replays/')
+                + pl.col('Win Replays').list.first()
+                + pl.lit('";"')
+                + pl.col('Win Replays').list.join(', ')
+                + pl.lit('")')
+            ).alias('Win Replays'),
+            (
+                pl.lit('=hyperlink("https://bar-rts.com/replays/')
+                + pl.col('Merged Win Replays').list.first()
+                + pl.lit('";"')
+                + pl.col('Merged Win Replays').list.join(', ')
+                + pl.lit('")')
+            ).alias('Merged Win Replays'),
+            (
+                pl.lit('=hyperlink("https://bar-rts.com/replays/')
+                + pl.col('Loss Replays').list.first()
+                + pl.lit('";"')
+                + pl.col('Loss Replays').list.join(', ')
+                + pl.lit('")')
+            ).alias('Loss Replays'),
+            (
+                pl.lit('=hyperlink("https://bar-rts.com/replays/')
+                + pl.col('Merged Loss Replays').list.first()
+                + pl.lit('";"')
+                + pl.col('Merged Loss Replays').list.join(', ')
+                + pl.lit('")')
+            ).alias('Merged Loss Replays'),
             pl.Series(pastes).alias('Copy Paste'),
         )
         .select(
@@ -585,6 +542,7 @@ def process_games(games, prefix):  # NOSONAR
         .rename({'Map Name': 'Map'})
         .sort(by=['Difficulty', '#Players', 'Map'], descending=[True, True, False])
     )
+
     push_gamesettings_export_df(group_export_df, prefix)
     del group_df_sample, pastes, group_export_df
 
@@ -818,6 +776,8 @@ def push_gamesettings_export_df(df, prefix):
                     df.get_column_index(x)
                     for x in [
                         'evocom',
+                        'experimentalextraunits',
+                        'experimentallegionfaction',
                         'ruins_only_t1',
                         'startenergy',
                         'startenergystorage',
@@ -878,6 +838,24 @@ def push_gamesettings_export_df(df, prefix):
                             'textFormat': {
                                 'fontSize': 10,
                             },
+                            'hyperlinkDisplayType': 'LINKED',
+                        }
+                    },
+                    'fields': 'userEnteredFormat.textFormat.fontSize,userEnteredFormat.hyperlinkDisplayType',
+                }
+            },
+            {
+                'repeatCell': {
+                    'range': {
+                        'sheetId': gamesettings_worksheet.id,
+                        'startColumnIndex': df.get_column_index('Copy Paste'),
+                        'startRowIndex': 1,
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'textFormat': {
+                                'fontSize': 9,
+                            },
                         }
                     },
                     'fields': 'userEnteredFormat.textFormat.fontSize',
@@ -893,6 +871,16 @@ def push_gamesettings_export_df(df, prefix):
         'parquet_path': path,
         'batch_requests': batch_requests,
         'clear': not dev and random.randint(1, 10) % 10 == 0,
+        'notes': {
+            number_to_column_letter(df.get_column_index(a)): b
+            for a, b in [
+                (
+                    'Merged Win Replays',
+                    'Win replays with harder gamesettings',
+                ),
+                ('Merged Loss Replays', 'Loss replays with easier gamesettings'),
+            ]
+        },
     }
     del df
 
@@ -912,7 +900,7 @@ def push_gamesettings_export_df(df, prefix):
         )
 
 
-def update_sheets(rating_number_df, prefix):
+def update_sheets(player_rating_df, prefix):
     spreadsheet_id = (
         '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
         if dev
@@ -931,7 +919,7 @@ def update_sheets(rating_number_df, prefix):
     )
 
     percent_int_cols = [
-        rating_number_df.columns.index(x)
+        player_rating_df.columns.index(x)
         for x in [
             'Award Rate',
             'Difficulty Completion',
@@ -940,16 +928,16 @@ def update_sheets(rating_number_df, prefix):
         ]
     ]
 
-    weighted_award_rate_col_index = rating_number_df.columns.index(
+    weighted_award_rate_col_index = player_rating_df.columns.index(
         'Weighted Award Rate'
     )
     int_cols = [
-        index for index, x in enumerate(rating_number_df.columns) if 'Rank' in x
+        index for index, x in enumerate(player_rating_df.columns) if 'Rank' in x
     ] + [
-        rating_number_df.columns.index(x)
+        player_rating_df.columns.index(x)
         for x in ['Difficulty Losers Sum', '#Settings', '#Games']
     ]
-    pve_rating_col_index = rating_number_df.columns.index('PVE Rating')
+    pve_rating_col_index = player_rating_df.columns.index('PVE Rating')
 
     batch_requests = [
         {
@@ -1095,15 +1083,42 @@ def update_sheets(rating_number_df, prefix):
             path,
             'wb',
         ) as f:
-            rating_number_df.write_parquet(f)
+            player_rating_df.write_parquet(f)
 
     payload = {
         'id': spreadsheet_id,
         'sheet_name': prefix + ' PVE Rating',
-        'columns': [rating_number_df.columns],
+        'columns': [player_rating_df.columns],
         'parquet_path': path,
         'batch_requests': batch_requests,
         'clear': True,
+        'notes': {
+            number_to_column_letter(player_rating_df.get_column_index(a)): b
+            for a, b in [
+                (
+                    'Award Rate',
+                    'Eco and Damage award summed (1+1) for all games with more than 1 player divided by the count of those games',
+                ),
+                (
+                    'Weighted Award Rate',
+                    'Same as Award Rate but also multiplied by the number of teammates in each game',
+                ),
+                ('Difficulty Record', 'Highest difficulty won (winners/players)'),
+                (
+                    'Difficulty Completion',
+                    'The highest value achieved by multiplying the difficulty by the amount of unique teammates in the gamesetting divided by a mapped value for each lobby size. Solo lobby win gives full completion. 16 player lobby wins maps to 40 unique teammates.'
+                    + ' X = max(difficulty * max(difficulty, sum(n_unique(teammates) / (value_map(lobby_size))))',
+                ),
+                (
+                    'Difficulty Losers Sum',
+                    'Sum of unique players that lost to gamesettings won by the player',
+                ),
+                ('#Settings', 'Unique settings'),
+                ('#Games', 'Count of games from 0 to 20'),
+                ('Win Rate', 'Wins/Games'),
+                ('PVE Rating', 'Linear interpolation of Combined Rank'),
+            ]
+        },
     }
     if dev:
         import Spreadsheet.spreadsheet as _spreadsheet
