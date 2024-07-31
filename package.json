@@ -2,13 +2,14 @@
   "name": "raptor-stats",
   "version": "0.1.0",
   "devDependencies": {
-    "@types/node": "20.14.10",
+    "@types/node": "20.14.12",
     "ts-node": "^10.9.2",
-    "typescript": "~5.5.3"
+    "typescript": "~5.5.4"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.149.0",
+    "aws-cdk-lib": "2.150.0",
     "constructs": "^10.3.0",
+    "hyparquet-compressors": "^0.1.4",
     "source-map-support": "^0.5.21"
   },
   "prettier": {

@@ -20,6 +20,10 @@ nbformat = "*"
 ipykernel = "*"
 orjson = "*"
 psutil = "*"
+pyarrow = "*"
+pandas = "*"
+watchdog = "*"
+hnswlib = "*"
 
 [dev-packages]
 

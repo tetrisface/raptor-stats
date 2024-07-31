@@ -9,8 +9,10 @@ node_modules
 
 .cdk.staging
 cdk.out
-*.parquet
+*.parquet*
+*.pickle
 *.csv
 *.xlsx
 *Zone.Identifier
 *.backup.*
+spads_plugin

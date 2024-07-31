@@ -5,29 +5,94 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "chrome-localhost-local-to-wsl",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceRoot}"
+      // "sourceMapPathOverrides": {
+      //   "/mnt/c/*": "C:/*"
+      // }
+    },
+    {
+      "name": "Web App",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/app",
+      "console": "integratedTerminal",
+      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "bun",
+      // "skipFiles": ["<node_internals>/**"],
+      "type": "node",
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Local: http://localhost:([0-9]+)",
+        "uriFormat": "http://localhost:%s"
+      }
+    },
+    {
       "name": "raptor_stats",
       "type": "debugpy",
       "request": "launch",
-      "module": "RaptorStats.raptor_stats",
-      "cwd": "${workspaceFolder}/lambdas",
+      "module": "raptor_stats",
+      "cwd": "${workspaceFolder}/python/lambdas",
       "console": "integratedTerminal",
       "env": {
         "ENV": "dev",
-        "DATA_BUCKET": "s3://replays-processing/"
+        "DATA_BUCKET": "replays-processing"
+        // "LIST_PAGE_UPDATE": "1",
+        // "LIST_PAGE_START": "1",
+        // "LIST_PAGE_SIZE": "500",
+        // "LIST_PAGE_PAGE_LIMIT": "174"
       }
     },
     {
       "name": "pve_rating",
       "type": "debugpy",
       "request": "launch",
-      "module": "PveRating.pve_rating",
-      "cwd": "${workspaceFolder}/lambdas",
+      "module": "lambdas.pve_rating",
+      "cwd": "${workspaceFolder}/python",
       "console": "integratedTerminal",
       "env": {
         "ENV": "dev",
-        "DATA_BUCKET": "s3://replays-processing/"
+        // "DATA_BUCKET": "replays-processing"
+        "DATA_BUCKET": "",
+        "FILE_SERVE_BUCKET": ""
+        // "FILE_SERVE_BUCKET": "pve-rating-web-file-serve"
         // "LOG_LEVEL": "DEBUG"
-        // "WRITE_DATA_BUCKET": "s3://replays-processing-dev/"
+      }
+    },
+    {
+      "name": "repair",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scripts.repair",
+      "cwd": "${workspaceFolder}/python/lambdas",
+      "console": "integratedTerminal",
+      "env": {
+        "ENV": "dev"
+      }
+    },
+    {
+      "name": "live lobby estimate",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "util.lobby_info",
+      "cwd": "${workspaceFolder}/python",
+      "console": "integratedTerminal",
+      "env": {
+        "ENV": "dev"
+      }
+    },
+    {
+      "name": "features",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "scripts.feature_importance_analysis",
+      "cwd": "${workspaceFolder}/python/lambdas",
+      "console": "integratedTerminal",
+      "env": {
+        "ENV": "dev",
+        "DATA_BUCKET": ""
       }
     }
   ]

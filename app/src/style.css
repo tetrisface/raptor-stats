@@ -1,0 +1,44 @@
+@import 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;700&display=swap';
+
+html,
+body {
+  height: 99.92%;
+  background-color: color-mix(in srgb, #fff, #2e3f57 55%);
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+@media (max-height: 1100px) {
+  html,
+  body {
+    height: 99.9%;
+  }
+}
+@media (max-height: 1000px) {
+  html,
+  body {
+    height: 99.88%;
+  }
+}
+@media (max-height: 800px) {
+  html,
+  body {
+    height: 99.6%;
+  }
+}
+@media (max-height: 220px) {
+  html,
+  body {
+    height: 99.53%;
+  }
+}
+#app {
+  background-color: color-mix(in srgb, #fff, #2e3f57 55%);
+  height: 100%;
+  margin: 0.2rem;
+  padding-bottom: 0.05rem;
+  margin-bottom: 0.3rem;
+  margin-top: 0.1rem;
+  display: flex;
+  flex-direction: column;
+}
