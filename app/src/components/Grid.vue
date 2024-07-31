@@ -41,7 +41,9 @@ export default {
     const fetchData = async (dataParam: string) => {
       try {
         const response = await fetch(
-          `https://d38hezhk058dms.cloudfront.net/${dataParam}_gamesettings.parquet`,
+          `https://${
+            process.env.ENV === 'dev' ? 'dev.' : ''
+          }files.pverating.bar/${dataParam}_gamesettings.parquet`,
         )
         if (!response.ok) {
           console.log('response.ok', response.ok, 'response', response)
@@ -115,13 +117,13 @@ export default {
       return dataParam.value === param
     }
     const items = [
-      { title: 'Barbarian', dataParam: 'Barbarian.grouped' },
+      { title: 'Barbarian', dataParam: 'Barbarian.regular.grouped' },
       { title: 'Barbarian unbeaten', dataParam: 'Barbarian.unbeaten.grouped' },
       { title: 'Barbarian cheese', dataParam: 'Barbarian.cheese.grouped' },
-      { title: 'Raptors', dataParam: 'Raptors.grouped' },
+      { title: 'Raptors', dataParam: 'Raptors.regular.grouped' },
       { title: 'Raptors unbeaten', dataParam: 'Raptors.unbeaten.grouped' },
       { title: 'Raptors cheese', dataParam: 'Raptors.cheese.grouped' },
-      { title: 'Scavengers', dataParam: 'Scavengers.grouped' },
+      { title: 'Scavengers', dataParam: 'Scavengers.regular.grouped' },
       {
         title: 'Scavengers unbeaten',
         dataParam: 'Scavengers.unbeaten.grouped',

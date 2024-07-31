@@ -19,11 +19,12 @@ from common.cast_frame import (
 )
 from common.common import (
     FILE_SERVE_BUCKET,
+    READ_DATA_BUCKET,
     WRITE_DATA_BUCKET,
-    get_df,
     get_secret,
     invoke_lambda,
     replay_details_file_name,
+    s3_download_df,
     s3_upload_df,
 )
 from common.gamesettings import (
@@ -34,7 +35,7 @@ from common.gamesettings import (
     barbarian_gamesetting_equal_columns,
 )
 from common.logger import get_logger, lambda_handler_decorator
-from lambdas.spreadsheet import (
+from spreadsheet import (
     get_or_create_worksheet,
     number_to_column_letter,
 )
@@ -59,7 +60,9 @@ b = np.array(lobby_size_teammates_completion_fit_output)
 
 @lambda_handler_decorator
 def main(*args):
-    _games = add_computed_cols(cast_frame(get_df(replay_details_file_name)))
+    _games = add_computed_cols(
+        cast_frame(s3_download_df(READ_DATA_BUCKET, replay_details_file_name))
+    )
 
     json_data = {
         'pve_ratings': {
@@ -84,7 +87,7 @@ def main(*args):
         buffer.write(orjson.dumps(json_data))
         buffer.seek(0)
         s3.put_object(
-            Bucket='pve-rating-web' + '-dev' if dev else '',
+            Bucket=FILE_SERVE_BUCKET,
             Key='pve_ratings.json',
             Body=buffer,
             StorageClass='INTELLIGENT_TIERING',
@@ -964,7 +967,7 @@ def push_gamesettings_export_df(df, prefix):
     }
     del df
 
-    # invoke_lambda('Spreadsheet', payload)
+    invoke_lambda('Spreadsheet', payload)
 
 
 def update_sheets(player_rating_df, prefix):

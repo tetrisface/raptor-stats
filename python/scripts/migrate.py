@@ -1,15 +1,21 @@
-from common.common import get_df, replay_details_file_name, replay_root_file_name
+from common.common import (
+    FILE_SERVE_BUCKET,
+    READ_DATA_BUCKET,
+    WRITE_DATA_BUCKET,
+    replay_details_file_name,
+    s3_download_df,
+    s3_upload_df,
+)
 from bpdb import set_trace as s
 import polars as pl
 import polars.selectors as cs
 
-from RaptorStats.raptor_stats import store_df
 from common.cast_frame import cast_frame
 from common.logger import get_logger
 
 logger = get_logger()
 
-df = cast_frame(get_df(replay_details_file_name))
+df = cast_frame(s3_download_df(READ_DATA_BUCKET, replay_details_file_name))
 
 df = df.with_columns(
     pl.when(
@@ -56,5 +62,6 @@ df = df.with_columns(
     # .otherwise(pl.col('fetch_success'))
     # .alias('fetch_success'),
 ).drop(cs.ends_with('_right'))
-store_df(df, replay_details_file_name)
 s()
+s3_upload_df(df, WRITE_DATA_BUCKET, replay_details_file_name)
+s3_upload_df(df, FILE_SERVE_BUCKET, replay_details_file_name)

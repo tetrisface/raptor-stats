@@ -22,23 +22,16 @@ export class WebAppStack extends Stack {
 
     // Create an S3 bucket for the website
     const websiteBucket = new aws_s3.Bucket(this, 'stats-web', {
-      blockPublicAccess: {
-        blockPublicAcls: false,
-        blockPublicPolicy: false,
-        ignorePublicAcls: false,
-        restrictPublicBuckets: false,
-      },
       encryption: aws_s3.BucketEncryption.S3_MANAGED,
       removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
-      publicReadAccess: true,
-      websiteIndexDocument: 'index.html',
+      publicReadAccess: false, // test
     })
 
     const originAccessIdentity = new OriginAccessIdentity(
       this,
       'OriginAccessIdentity',
     )
-    // websiteBucket.grantRead(originAccessIdentity)
+    websiteBucket.grantRead(originAccessIdentity) // test
 
     // Update the S3 bucket policy to allow CloudFront to read objects
     websiteBucket.addToResourcePolicy(

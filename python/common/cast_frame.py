@@ -60,7 +60,7 @@ string_columns = {
 }
 
 int_columns = {
-    'accuratelasers',  # todo delete
+    'accuratelasers',
     'ai_incomemultiplier',  # todo delete
     'air_rework',
     'allowpausegameplay',

@@ -32,7 +32,7 @@ deploy-get-requirements:
 	echo "todo"
 
 deploy:
-	rm -rf cdk.out/*
+	rm -rf cdk.out/* & ./clear_old_docker_images.sh
 	(cd app && bun run build)
 	cdk deploy --all
 

@@ -7,38 +7,35 @@ import polars as pl
 import polars.selectors as cs
 from bpdb import set_trace as s
 from common.cast_frame import map_replace_regex_string, reorder_column
-from common.common import LOCAL_DATA_DIR
+from common.common import (
+    FILE_SERVE_BUCKET,
+    s3_download_df,
+    s3_upload_df,
+)
 from common.logger import get_logger
-from util.create_ann_index import get_hnsw_index
+from scripts.create_ann_index import get_hnsw_index
 
+logger = get_logger()
 bar_dir = f'/mnt/c/Users/{os.environ["WINDOWS_USERNAME"]}/AppData/Local/Programs/Beyond-All-Reason/data/'
 modoptions_file = os.path.join(bar_dir, 'modoptions.json')
 players_file = os.path.join(bar_dir, 'users.json')
 bot_file = os.path.join(bar_dir, 'bot.txt')
 map_file = os.path.join(bar_dir, 'map.txt')
 
-logger = get_logger()
-
-ratings = {
-    'Barbarian': pl.read_parquet(
-        os.path.join(LOCAL_DATA_DIR, 'PveRating.Barbarian_gamesettings.parquet')
-    ),
-    'Raptors': pl.read_parquet(
-        os.path.join(LOCAL_DATA_DIR, 'PveRating.Raptors_gamesettings.parquet')
-    ),
-    'Scavengers': pl.read_parquet(
-        os.path.join(LOCAL_DATA_DIR, 'PveRating.Scavengers_gamesettings.parquet')
-    ),
-}
-
-ratings = {
-    k: reorder_column(
-        v.with_row_index().rename({'index': '#'}).drop(cs.contains('Rank')),
+ratings = {}
+for prefix in [
+    'PveRating.Barbarian_gamesettings.parquet',
+    'PveRating.Raptors_gamesettings.parquet',
+    'PveRating.Scavengers_gamesettings.parquet',
+]:
+    x_key = f'PveRating.{prefix}_gamesettings.parquet'
+    df = s3_download_df(FILE_SERVE_BUCKET, x_key)
+    s3_upload_df(df, '', x_key)
+    ratings[prefix] = reorder_column(
+        df.with_row_index().rename({'index': '#'}).drop(cs.contains('Rank')),
         2,
         'PVE Rating',
     )
-    for k, v in ratings.items()
-}
 
 
 def watch_file(file_path, callback, interval=1):

@@ -14,10 +14,15 @@ import {
   aws_s3,
   aws_secretsmanager,
   aws_sns,
+  aws_sns_subscriptions,
 } from 'aws-cdk-lib'
-import * as lambda from 'aws-cdk-lib/aws-lambda'
 import { Construct } from 'constructs'
-import bucketName, { WebStack } from './infrastructure/web'
+import {
+  webFileServeBucketName,
+  WebStackDev,
+  WebStack,
+} from './infrastructure/web'
+import { WebAppStack } from './infrastructure/web_app'
 
 export class RaptorStatsStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
@@ -25,26 +30,33 @@ export class RaptorStatsStack extends Stack {
 
     const DATA_BUCKET = 'replays-processing'
     const bucketProps = {
-      bucketName: DATA_BUCKET,
-      blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
       accessControl: aws_s3.BucketAccessControl.PRIVATE,
-      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
+      blockPublicAccess: aws_s3.BlockPublicAccess.BLOCK_ALL,
+      bucketName: DATA_BUCKET,
       encryption: aws_s3.BucketEncryption.S3_MANAGED,
+      publicReadAccess: false,
+      removalPolicy: RemovalPolicy.RETAIN_ON_UPDATE_OR_DELETE,
       versioned: false,
     }
 
-    const dataBucket = new aws_s3.Bucket(this, DATA_BUCKET, bucketProps)
+    const dataBucket = new aws_s3.Bucket(this, DATA_BUCKET, {
+      ...bucketProps,
+      ...{ versioned: true },
+    })
     const dataBucketDev = new aws_s3.Bucket(this, DATA_BUCKET + '-dev', {
       ...bucketProps,
       ...{
         bucketName: DATA_BUCKET + '-dev',
       },
     })
+    dataBucket.addLifecycleRule({
+      noncurrentVersionExpiration: Duration.days(21),
+    })
 
     const webBucket = aws_s3.Bucket.fromBucketName(
       this,
       'ImportedBucket',
-      bucketName,
+      webFileServeBucketName,
     )
 
     const gcpSecret = aws_secretsmanager.Secret.fromSecretCompleteArn(
@@ -55,30 +67,35 @@ export class RaptorStatsStack extends Stack {
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
       schedule: aws_events.Schedule.expression(
-        // 'cron(0 */2 * * ? *)',
-        'cron(0 1,4,7,10,13,16,19,22 * * ? *)',
+        'cron(0 */6 * * ? *)',
+        // 'cron(0 1,4,7,10,13,16,19,22 * * ? *)',
       ),
     })
 
     assert(typeof process.env.DISCORD_USERNAME === 'string')
+    assert(typeof process.env.ALARM_EMAIL === 'string')
+
+    const imageAsset = (handler: string) =>
+      aws_lambda.DockerImageCode.fromImageAsset(__dirname, {
+        cmd: [`${handler}.main`],
+        exclude: ['**/*.pyc', '**/__pycache__'],
+      })
 
     const lambdaProps = {
-      code: lambda.DockerImageCode.fromImageAsset(__dirname, {
-        cmd: ['RaptorStats.lambda_handler.handler'],
-      }),
+      code: imageAsset('raptor_stats'),
       functionName: 'RaptorStats',
       environment: {
         DISCORD_USERNAME: process.env.DISCORD_USERNAME,
-        DATA_BUCKET: `s3://${dataBucket.bucketName}/`,
+        DATA_BUCKET: dataBucket.bucketName,
       },
       timeout: Duration.seconds(900),
-      memorySize: 1900,
+      memorySize: 2500,
       architecture: aws_lambda.Architecture.ARM_64,
       retryAttempts: 0,
       maxEventAge: Duration.minutes(5),
       logRetention: aws_logs.RetentionDays.ONE_MONTH,
     }
-    const raptorStats = new lambda.DockerImageFunction(
+    const raptorStats = new aws_lambda.DockerImageFunction(
       this,
       'RaptorStats',
       lambdaProps,
@@ -90,15 +107,13 @@ export class RaptorStatsStack extends Stack {
       new aws_events_targets.LambdaFunction(raptorStats),
     )
 
-    const pveRating = new lambda.DockerImageFunction(this, 'PveRating', {
+    const pveRating = new aws_lambda.DockerImageFunction(this, 'PveRating', {
       ...lambdaProps,
       ...{
-        code: lambda.DockerImageCode.fromImageAsset(__dirname, {
-          cmd: ['PveRating.lambda_handler.handler'],
-        }),
+        code: imageAsset('pve_rating'),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 1300,
+        memorySize: 1900,
       },
     })
 
@@ -107,17 +122,19 @@ export class RaptorStatsStack extends Stack {
     dataBucketDev.grantReadWrite(pveRating)
     webBucket.grantWrite(pveRating)
 
-    const spreadsheet = new lambda.DockerImageFunction(this, 'Spreadsheet', {
-      ...lambdaProps,
-      ...{
-        code: lambda.DockerImageCode.fromImageAsset(__dirname, {
-          cmd: ['Spreadsheet.lambda_handler.handler'],
-        }),
-        functionName: 'Spreadsheet',
-        timeout: Duration.seconds(500),
-        memorySize: 600,
+    const spreadsheet = new aws_lambda.DockerImageFunction(
+      this,
+      'Spreadsheet',
+      {
+        ...lambdaProps,
+        ...{
+          code: imageAsset('spreadsheet'),
+          functionName: 'Spreadsheet',
+          timeout: Duration.seconds(500),
+          memorySize: 600,
+        },
       },
-    })
+    )
 
     spreadsheet.grantInvoke(raptorStats)
     spreadsheet.grantInvoke(pveRating)
@@ -129,6 +146,9 @@ export class RaptorStatsStack extends Stack {
       topicName: 'lambda-exception-topic',
     })
 
+    exceptionTopic.addSubscription(
+      new aws_sns_subscriptions.EmailSubscription(process.env.ALARM_EMAIL),
+    )
     ;[raptorStats, pveRating, spreadsheet].forEach((fun) => {
       fun
         .metricErrors({
@@ -170,9 +190,6 @@ export class RaptorStatsStack extends Stack {
     })
   }
 }
-const env = { account: '190920611368', region: 'eu-north-1' }
-const app = new App()
-new WebStack(app, 'WebStack', { env }) // NOSONAR
 const stackProps = {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
@@ -182,8 +199,13 @@ const stackProps = {
   // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
   /* Uncomment the next line if you know exactly what Account and Region you
    * want to deploy the stack to. */
-  env,
+  env: { account: '190920611368', region: 'eu-north-1' },
   /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
 }
+const app = new App()
+new WebStack(app, 'WebStack', stackProps) // NOSONAR
+new WebStackDev(app, 'WebStackDev', stackProps) // NOSONAR
+new WebAppStack(app, 'WebAppStack', stackProps) // NOSONAR
 new RaptorStatsStack(app, 'RaptorStatsStack', stackProps) // NOSONAR
+// new ExperimentStack(app, 'ExperimentStack', stackProps) // NOSONAR
 app.synth()

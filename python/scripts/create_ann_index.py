@@ -7,7 +7,7 @@ import hnswlib
 import polars as pl
 import polars.selectors as cs
 
-from bpdb import set_trace as s
+from bpdb import set_trace as s  # noqa: F401
 
 from common.logger import get_logger
 from common.common import LOCAL_DATA_DIR, grouped_gamesettings_preprocessor
@@ -99,7 +99,7 @@ def get_hnsw_index(prefix):
     # p.set_ef(10)
 
     # Query dataset, k - number of the closest elements (returns 2 numpy arrays)
-    labels, distances = ann_index.knn_query(df_preprocessed, k=1)
+    # labels, distances = ann_index.knn_query(df_preprocessed, k=1)
 
     # Index objects support pickling
     # WARNING: serialization via pickle.dumps(p) or p.__getstate__() is NOT thread-safe with p.add_items method!

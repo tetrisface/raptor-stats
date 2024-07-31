@@ -1,24 +1,21 @@
 import importlib
 import os
-from pathlib import Path
 import re
 import tempfile
 import warnings
+from pathlib import Path
+
 import boto3
 import orjson
 import polars as pl
-from sklearn.compose import ColumnTransformer
-from sklearn.discriminant_analysis import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-
 from common.logger import get_logger
-from bpdb import set_trace as s
 
 logger = get_logger()
 
 dev = os.environ.get('ENV', 'prod') == 'dev'
+
+if dev:
+    from bpdb import set_trace as s  # noqa: F401
 
 
 replay_root_file_name = 'replays.parquet'
@@ -31,18 +28,6 @@ LOCAL_DATA_DIR = os.environ.get(
 )
 
 
-def get_df(path):
-    if dev and not os.path.exists(path):
-        df = s3_download_df(READ_DATA_BUCKET, path)
-        df.write_parquet(path)
-        return df
-    if not dev:
-        path = os.path.join('s3://', READ_DATA_BUCKET, path)
-    df = pl.read_parquet(path)
-    logger.info(f'Fetched {len(df)} from "{path}"')
-    return df
-
-
 def get_secret():
     secret_name = 'raptor-gcp'
     region_name = 'eu-north-1'
@@ -51,10 +36,7 @@ def get_secret():
     session = boto3.session.Session()
     client = session.client(service_name='secretsmanager', region_name=region_name)
 
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-    except Exception as e:
-        raise e
+    get_secret_value_response = client.get_secret_value(SecretId=secret_name)
 
     return get_secret_value_response['SecretString']
 
@@ -74,13 +56,14 @@ def invoke_lambda(function_name: str, payload: dict = {}):
     if dev:
         logger.info(f'Invoking local {function_name} {payload.get('sheet_name', '')}')
         module_name = os.path.join(
-            'lambdas', re.sub(r'(?<!^)(?=[A-Z])', '_', function_name).lower()
+            re.sub(r'(?<!^)(?=[A-Z])', '_', function_name).lower()
         )
-        spec = importlib.util.spec_from_file_location(module_name, module_name + '.py')
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module = importlib.import_module('.', module_name)
+        if hasattr(module, 'main'):
+            module.main(payload, {'function_name': function_name})
+        else:
+            logger.error(f'Failed importing {module_name}.py (no main())')
 
-        module.main(payload, {'function_name': function_name})
     else:
         logger.info(f'Invoking {function_name} {payload.get('sheet_name', '')}')
         boto3.client('lambda').invoke(
@@ -118,6 +101,11 @@ def s3_download_df(bucket, key):
         df = pl.read_parquet(key)
         logger.info(f'Read {len(df)} locally from {key}')
         return df
+    if os.environ.get('LOCAL_CACHE'):
+        df = pl.read_parquet(os.path.join(LOCAL_DATA_DIR, key))
+        logger.info(f'Read {len(df)} locally from {key}, reason=LOCAL_CACHE')
+        return df
+
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', category=UserWarning)
         with tempfile.SpooledTemporaryFile() as tmp_file:
@@ -129,32 +117,3 @@ def s3_download_df(bucket, key):
             tmp_file.seek(0)
             df = pl.read_parquet(tmp_file)
     return df
-
-
-def grouped_gamesettings_preprocessor(numerical_cols, categorical_cols):
-    # Preprocessing for numerical data
-    numerical_transformer = Pipeline(
-        memory=None,
-        steps=[
-            ('imputer', SimpleImputer(strategy='mean')),
-            ('scaler', StandardScaler()),
-        ],
-    )
-
-    # Preprocessing for categorical data
-    categorical_transformer = Pipeline(
-        memory=None,
-        steps=[
-            ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore')),
-        ],
-    )
-
-    # Combine preprocessing steps
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', numerical_transformer, numerical_cols),
-            ('cat', categorical_transformer, categorical_cols),
-        ]
-    )
-    return preprocessor

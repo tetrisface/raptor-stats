@@ -1,17 +1,13 @@
+import random
 import polars.selectors as cs
 import polars as pl
-from sklearn.compose import ColumnTransformer
-from sklearn.discriminant_analysis import StandardScaler
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
+
 
 from common.cast_frame import cast_frame, add_computed_cols
-from bpdb import set_trace as s
+from bpdb import set_trace as s  # noqa: F401
 
-from lambdas.pve_rating import group_games_gamesettings
-from python.lambdas.Common.common import grouped_gamesettings_preprocessor
+from pve_rating import group_games_gamesettings
+from common.common import grouped_gamesettings_preprocessor
 
 # feature importance analysis
 games = add_computed_cols(
@@ -77,7 +73,11 @@ pl.Config(fmt_table_cell_list_len=-1, fmt_str_lengths=1001)
 from sklearn.ensemble import RandomForestRegressor
 
 # Train a random forest model
-model = RandomForestRegressor()
+model = RandomForestRegressor(
+    min_samples_leaf=10,
+    max_features=10000,
+    random_state=random.seed(),
+)
 model.fit(X_preprocessed, y)
 
 # Get feature importances
@@ -108,7 +108,11 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # Train model for evaluation
-model = RandomForestRegressor()
+model = RandomForestRegressor(
+    min_samples_leaf=10,
+    max_features=10000,
+    random_state=random.seed(),
+)
 model.fit(X_train, y_train)
 
 # Make predictions

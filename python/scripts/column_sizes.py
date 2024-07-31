@@ -1,9 +1,12 @@
+import os
 from pprint import pprint
-from bpdb import set_trace as s
 import polars as pl
 
 from common.logger import get_logger
 from pve_rating import user_ids_name_map
+
+if os.environ.get('ENV', 'prod') == 'dev':
+    from bpdb import set_trace as s  # noqa: F401
 
 logger = get_logger()
 

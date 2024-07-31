@@ -8,10 +8,11 @@ import polars.selectors as cs
 import requests
 from common.cast_frame import add_computed_cols, cast_frame
 from common.common import (
+    READ_DATA_BUCKET,
     WRITE_DATA_BUCKET,
     FILE_SERVE_BUCKET,
-    get_df,
     invoke_lambda,
+    s3_download_df,
     s3_upload_df,
 )
 from common.gamesettings import gamesetting_equal_columns
@@ -22,27 +23,13 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
 
-
 replays_root_file_name = 'replays.parquet'
 replay_details_file_name = 'replays_gamesettings.parquet'
 
 
-def store_df(df, file_name, store_web=True):
-    if dev:
-        logger.info(f'Writing {len(df)} to {file_name}')
-        df.write_parquet(file_name)
-    else:
-        parquet_path = os.path.join(WRITE_DATA_BUCKET, file_name)
-        web_path = os.path.join(FILE_SERVE_BUCKET, file_name) if store_web else ''
-        logger.info(f'Writing {len(df)} to {parquet_path} and {web_path}')
-
-        s3_upload_df(df, WRITE_DATA_BUCKET, file_name)
-        s3_upload_df(df, FILE_SERVE_BUCKET, file_name)
-
-
 @lambda_handler_decorator
 def main(*args):
-    games = get_df(replays_root_file_name)
+    games = s3_download_df(READ_DATA_BUCKET, replays_root_file_name)
     api = None
 
     n_received_rows = page_size = int(
@@ -127,12 +114,13 @@ def main(*args):
     del api
 
     if n_total_received_rows > 0:
-        store_df(games, replays_root_file_name)
+        s3_upload_df(games, WRITE_DATA_BUCKET, replays_root_file_name)
+        s3_upload_df(games, FILE_SERVE_BUCKET, replays_root_file_name)
 
     games = add_computed_cols(games).rename({'AllyTeams': 'AllyTeamsList'})
 
     logger.info('Fetching replay details')
-    replay_details_cache = get_df(replay_details_file_name)
+    replay_details_cache = s3_download_df(READ_DATA_BUCKET, replay_details_file_name)
 
     games = (
         games.join(
@@ -305,7 +293,8 @@ def main(*args):
     # )
 
     # store
-    store_df(games, replay_details_file_name)
+    s3_upload_df(games, WRITE_DATA_BUCKET, replay_details_file_name)
+    s3_upload_df(games, FILE_SERVE_BUCKET, replay_details_file_name)
 
     invoke_lambda('PveRating', {})
 
