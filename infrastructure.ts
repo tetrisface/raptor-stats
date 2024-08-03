@@ -53,7 +53,7 @@ export class RaptorStatsStack extends Stack {
       noncurrentVersionExpiration: Duration.days(21),
     })
 
-    const webBucket = aws_s3.Bucket.fromBucketName(
+    const fileServeBucket = aws_s3.Bucket.fromBucketName(
       this,
       'ImportedBucket',
       webFileServeBucketName,
@@ -67,8 +67,8 @@ export class RaptorStatsStack extends Stack {
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
       schedule: aws_events.Schedule.expression(
-        'cron(0 */6 * * ? *)',
-        // 'cron(0 1,4,7,10,13,16,19,22 * * ? *)',
+        // 'cron(0 */6 * * ? *)',
+        'cron(0 1,4,7,10,13,16,19,22 * * ? *)',
       ),
     })
 
@@ -102,7 +102,7 @@ export class RaptorStatsStack extends Stack {
     )
     dataBucket.grantReadWrite(raptorStats)
     dataBucketDev.grantReadWrite(raptorStats)
-    webBucket.grantWrite(raptorStats)
+    fileServeBucket.grantWrite(raptorStats)
     eventRuleRaptorStats.addTarget(
       new aws_events_targets.LambdaFunction(raptorStats),
     )
@@ -120,7 +120,7 @@ export class RaptorStatsStack extends Stack {
     pveRating.grantInvoke(raptorStats)
     dataBucket.grantReadWrite(pveRating)
     dataBucketDev.grantReadWrite(pveRating)
-    webBucket.grantWrite(pveRating)
+    fileServeBucket.grantWrite(pveRating)
 
     const spreadsheet = new aws_lambda.DockerImageFunction(
       this,
@@ -141,6 +141,25 @@ export class RaptorStatsStack extends Stack {
     dataBucket.grantRead(spreadsheet)
     dataBucketDev.grantRead(spreadsheet)
 
+    const recentGames = new aws_lambda.DockerImageFunction(
+      this,
+      'RecentGames',
+      {
+        ...lambdaProps,
+        ...{
+          code: imageAsset('recent_games'),
+          functionName: 'RecentGames',
+          timeout: Duration.seconds(500),
+          memorySize: 2600,
+        },
+      },
+    )
+
+    recentGames.grantInvoke(pveRating)
+    dataBucket.grantRead(recentGames)
+    dataBucketDev.grantRead(recentGames)
+    fileServeBucket.grantReadWrite(recentGames)
+
     const exceptionTopic = new aws_sns.Topic(this, 'lambda-exception-topic', {
       displayName: 'lambda-exception-topic',
       topicName: 'lambda-exception-topic',
@@ -149,7 +168,7 @@ export class RaptorStatsStack extends Stack {
     exceptionTopic.addSubscription(
       new aws_sns_subscriptions.EmailSubscription(process.env.ALARM_EMAIL),
     )
-    ;[raptorStats, pveRating, spreadsheet].forEach((fun) => {
+    ;[raptorStats, pveRating, spreadsheet, recentGames].forEach((fun) => {
       fun
         .metricErrors({
           period: Duration.minutes(1),

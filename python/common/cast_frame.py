@@ -206,7 +206,7 @@ nuttyb_hp_df = pl.DataFrame(
 map_replace_regex_string = r'(?i)[_\s]+[v\d\.]+\w*$'
 
 
-def reorder_column(df, new_position, col_name):
+def reorder_column(df: pl.DataFrame, new_position: int, col_name: str):
     if col_name not in df.columns:
         return df
     neworder = df.columns

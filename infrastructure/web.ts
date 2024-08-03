@@ -1,4 +1,5 @@
 import {
+  Duration,
   RemovalPolicy,
   Stack,
   StackProps,
@@ -33,6 +34,17 @@ export class WebStack extends Stack {
       maxAge: 3000,
     })
 
+    const cachePolicy = new aws_cloudfront.CachePolicy(
+      this,
+      'FileServeCachePolicy',
+      {
+        cachePolicyName: 'FileServeCachePolicy',
+        defaultTtl: Duration.minutes(30),
+        maxTtl: Duration.minutes(30),
+        minTtl: Duration.minutes(20),
+      },
+    )
+
     const originAccessIdentity = new aws_cloudfront.OriginAccessIdentity(
       this,
       'OriginAccessIdentity',
@@ -45,6 +57,7 @@ export class WebStack extends Stack {
         origin: new aws_cloudfront_origins.S3Origin(bucket, {
           originAccessIdentity,
         }),
+        cachePolicy,
         viewerProtocolPolicy:
           aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },

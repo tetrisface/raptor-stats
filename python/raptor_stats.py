@@ -296,7 +296,7 @@ def main(*args):
     s3_upload_df(games, WRITE_DATA_BUCKET, replay_details_file_name)
     s3_upload_df(games, FILE_SERVE_BUCKET, replay_details_file_name)
 
-    invoke_lambda('PveRating', {})
+    invoke_lambda('PveRating')
 
     return 'done fetching'
 

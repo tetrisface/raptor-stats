@@ -34,7 +34,15 @@ deploy-get-requirements:
 deploy:
 	rm -rf cdk.out/* & ./clear_old_docker_images.sh
 	(cd app && bun run build)
-	cdk deploy --all
+	@if [ -z "$(stack)" ]; then \
+		echo "Deploying all stacks"; \
+		cdk deploy --all; \
+	else \
+		echo "Deploying stack: $(stack)"; \
+		cdk deploy $(stack); \
+	fi
+
+
 
 deploy-lambda:
 	rm -rf cdk.out/*
@@ -46,7 +54,11 @@ deploy-app:
 	cdk deploy WebAppStack
 
 tail:
-	aws logs tail /aws/lambda/RaptorStats --follow & aws logs tail /aws/lambda/PveRating --follow & aws logs tail /aws/lambda/Spreadsheet --follow
+	aws logs tail /aws/lambda/RaptorStats --follow & /
+	aws logs tail /aws/lambda/PveRating --follow & /
+	aws logs tail /aws/lambda/Spreadsheet --follow & /
+	aws logs tail /aws/lambda/RecentGames --follow
+
 
 upload:
 	aws s3 cp $(LOCAL_PATH)replays.parquet $(DATA_BUCKET)replays.parquet

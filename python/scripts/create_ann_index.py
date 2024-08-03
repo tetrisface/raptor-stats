@@ -2,15 +2,18 @@ import os
 import pickle
 import pprint
 from types import SimpleNamespace
-from typing import Counter
+from typing import Counter, OrderedDict
 import hnswlib
 import polars as pl
 import polars.selectors as cs
 
 from bpdb import set_trace as s  # noqa: F401
 
+from common.common import LOCAL_DATA_DIR
 from common.logger import get_logger
-from common.common import LOCAL_DATA_DIR, grouped_gamesettings_preprocessor
+from common.grouped_gamesettings import (
+    grouped_gamesettings_preprocessor,
+)
 
 logger = get_logger()
 
@@ -20,20 +23,13 @@ def get_hnsw_index(prefix):
     preprocessor_path = os.path.join(
         LOCAL_DATA_DIR, f'{prefix}.hnsw_preprocessor.pickle'
     )
-    # if os.path.exists(index_path) and os.path.exists(preprocessor_path):
-    #     logger.info(f'Loading {prefix} index')
-    #     with open(index_path, 'rb') as file:
-    #         ann_index = pickle.loads(file.read())
-    #     with open(preprocessor_path, 'rb') as file:
-    #         preprocessor = pickle.loads(file.read())
-    #     return SimpleNamespace(ann_index=ann_index, preprocessor=preprocessor)
 
     logger.info(
         f'Creating {prefix} hierarchical navigable small world approximate nearest neighbor index'
     )
     df = pl.read_parquet(
         os.path.join(LOCAL_DATA_DIR, f'{prefix}.all.grouped_gamesettings.parquet')
-    ).filter(pl.col('#Players') >= (200 if prefix == 'Raptors' else 20))
+    ).filter(pl.col('#Players') >= 30)
 
     diffs = (
         df.select('Difficulty')
@@ -74,12 +70,13 @@ def get_hnsw_index(prefix):
         .tolist()
     )
     feature_prefixes = [x.split('_')[0] for x in categorical_feature_names]
-    logger.info(f'Categorical features: {pprint.pformat(Counter(feature_prefixes))}')
+    logger.info(f'Categorical features: {OrderedDict(Counter(feature_prefixes))}')
 
     ann_index = hnswlib.Index(
-        space='l2', dim=df_preprocessed.shape[1]
-    )  # possible options are l2, cosine or ip
-
+        space='l2',
+        # space='cosine',
+        dim=df_preprocessed.shape[1],
+    )
     # Initializing index
     # max_elements - the maximum number of elements (capacity). Will throw an exception if exceeded
     # during insertion of an element.

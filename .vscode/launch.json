@@ -54,11 +54,28 @@
       "console": "integratedTerminal",
       "env": {
         "ENV": "dev",
-        // "DATA_BUCKET": "replays-processing"
-        "DATA_BUCKET": "",
+        "DATA_BUCKET": "replays-processing",
+        // "DATA_BUCKET": "",
         "FILE_SERVE_BUCKET": ""
         // "FILE_SERVE_BUCKET": "pve-rating-web-file-serve"
         // "LOG_LEVEL": "DEBUG"
+      }
+    },
+    {
+      "name": "recent_games",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "recent_games",
+      "cwd": "${workspaceFolder}/python",
+      "console": "integratedTerminal",
+      "env": {
+        "DATA_BUCKET": "replays-processing",
+        // "DATA_BUCKET": "",
+        "FILE_SERVE_BUCKET": "pve-rating-web-file-serve",
+        // "FILE_SERVE_BUCKET": "",
+        // "LOCAL_CACHE": "1",
+        // "LOG_LEVEL": "DEBUG"
+        "ENV": "dev"
       }
     },
     {
@@ -76,10 +93,12 @@
       "name": "live lobby difficulty",
       "type": "debugpy",
       "request": "launch",
-      "module": "util.lobby_live_difficulty",
+      "module": "scripts.lobby_live_difficulty",
       "cwd": "${workspaceFolder}/python",
       "console": "integratedTerminal",
       "env": {
+        "DATA_BUCKET": "replays-processing",
+        "LOCAL_CACHE": "1",
         "ENV": "dev"
       }
     },

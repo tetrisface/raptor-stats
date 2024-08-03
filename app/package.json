@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@tanstack/vue-table": "^8.19.3",
+    "@types/lodash": "^4.17.7",
     "ag-grid-vue3": "^32.0.2",
     "closevector-hnswlib-wasm": "^0.1.1",
     "hyparquet": "^1.0.1",
     "hyparquet-compressors": "^0.1.4",
+    "lodash": "^4.17.21",
     "oh-vue-icons": "^1.0.0-rc3",
     "vue": "^3.4.31"
   },

@@ -89,7 +89,7 @@ def s3_upload_df(df, bucket, key):
             tmp_file.seek(0)
             boto3.client('s3').upload_fileobj(
                 tmp_file,
-                bucket + ('-dev' if dev else ''),
+                bucket,
                 key,
                 ExtraArgs={'StorageClass': 'INTELLIGENT_TIERING'},
             )
@@ -101,19 +101,53 @@ def s3_download_df(bucket, key):
         df = pl.read_parquet(key)
         logger.info(f'Read {len(df)} locally from {key}')
         return df
-    if os.environ.get('LOCAL_CACHE'):
-        df = pl.read_parquet(os.path.join(LOCAL_DATA_DIR, key))
+
+    path = os.path.join(LOCAL_DATA_DIR, key)
+    if os.environ.get('LOCAL_CACHE') and os.path.exists(path):
+        df = pl.read_parquet(path)
         logger.info(f'Read {len(df)} locally from {key}, reason=LOCAL_CACHE')
         return df
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore', category=UserWarning)
-        with tempfile.SpooledTemporaryFile() as tmp_file:
-            boto3.client('s3').download_fileobj(
-                bucket + ('-dev' if dev else ''),
-                key,
-                tmp_file,
-            )
-            tmp_file.seek(0)
-            df = pl.read_parquet(tmp_file)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=UserWarning)
+            with tempfile.SpooledTemporaryFile() as tmp_file:
+                boto3.client('s3').download_fileobj(
+                    bucket,
+                    key,
+                    tmp_file,
+                )
+                tmp_file.seek(0)
+                df = pl.read_parquet(tmp_file)
+    except Exception as e:
+        logger.error(e)
+        logger.info(f'Failed fetching s3://{bucket}/{key}')
+        raise
+    logger.info(f'Fetched {len(df)} from s3://{bucket}/{key}')
     return df
+
+
+def user_ids_name_map(games):
+    logger.info('Making user id->player name mapping')
+    cols = (
+        games.sort('startTime', descending=False)
+        .select(
+            pl.col('AllyTeams')
+            .list.eval(
+                pl.element()
+                .struct['Players']
+                .list.eval(
+                    pl.struct(
+                        pl.element().struct['userId'].cast(pl.UInt32),
+                        pl.element().struct['name'],
+                    )
+                )
+                .flatten()
+                .drop_nulls()
+            )
+            .explode()
+        )
+        .unnest('AllyTeams')
+        .to_dict()
+    )
+    return {k: v for (k, v) in zip(cols['userId'], cols['name'])}

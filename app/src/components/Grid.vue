@@ -3,11 +3,11 @@ import { Ref, ref, watch } from 'vue'
 import 'ag-grid-community/styles/ag-grid.css' // Mandatory CSS required by the Data Grid
 import 'ag-grid-community/styles/ag-theme-quartz.css' // Optional Theme applied to the Data Grid
 import { AgGridVue } from 'ag-grid-vue3' // Vue Data Grid Component
-import { parquetMetadata, parquetRead } from 'hyparquet'
-import { compressors } from 'hyparquet-compressors'
 import ReplayLink from './ReplayLink.vue'
-import columnsToColDefs from '../columnDefs'
 import CellCopy from './CellCopy.vue'
+import { fetchData } from '../resolver'
+
+type View = { title: any; rating?: boolean | undefined }
 
 export default {
   name: 'App',
@@ -23,9 +23,40 @@ export default {
       editable: true,
     })
 
+    const views: { [key: string]: View } = {
+      gamesetting_games: { title: 'Recent Games' },
+      'Barbarian.regular.grouped_gamesettings': { title: 'Barbarian' },
+      'Barbarian.unbeaten.grouped_gamesettings': {
+        title: 'Barbarian unbeaten',
+      },
+      'Barbarian.cheese.grouped_gamesettings': { title: 'Barbarian cheese' },
+      'Raptors.regular.grouped_gamesettings': { title: 'Raptors' },
+      'Raptors.unbeaten.grouped_gamesettings': { title: 'Raptors unbeaten' },
+      'Raptors.cheese.grouped_gamesettings': { title: 'Raptors cheese' },
+      'Scavengers.regular.grouped_gamesettings': {
+        title: 'Scavengers',
+      },
+      'Scavengers.unbeaten.grouped_gamesettings': {
+        title: 'Scavengers unbeaten',
+      },
+      'Scavengers.cheese.grouped_gamesettings': { title: 'Scavengers cheese' },
+      'PveRating.Barbarian_gamesettings': {
+        title: 'PVE Rating Barbarian',
+        rating: true,
+      },
+      'PveRating.Raptors_gamesettings': {
+        title: 'PVE Rating Raptors',
+        rating: true,
+      },
+      'PveRating.Scavengers_gamesettings': {
+        title: 'PVE Rating Scavengers',
+        rating: true,
+      },
+    }
+
     const dataParam = ref(
       new URL(window.location.href).hash.slice(1) == ''
-        ? 'Barbarian.grouped'
+        ? 'gamesetting_games'
         : new URL(window.location.href).hash.slice(1),
     )
 
@@ -35,58 +66,10 @@ export default {
     }
 
     watch(dataParam, (newParam) => {
-      fetchData(newParam)
+      fetchData(newParam, rowData, colDefs)
     })
 
-    const fetchData = async (dataParam: string) => {
-      try {
-        const response = await fetch(
-          `https://${
-            process.env.ENV === 'dev' ? 'dev.' : ''
-          }files.pverating.bar/${dataParam}_gamesettings.parquet`,
-        )
-        if (!response.ok) {
-          console.log('response.ok', response.ok, 'response', response)
-        }
-
-        const arrayBuffer = await response.arrayBuffer()
-        await parquetRead({
-          file: arrayBuffer,
-          compressors,
-          onComplete: (parquetData: any) => {
-            const schema = parquetMetadata(arrayBuffer).schema
-            const columns = schema.reduce(
-              (acc: { [key: string]: string }[], column, index) => {
-                if (
-                  index > 0 &&
-                  schema[index].name !== 'item' &&
-                  schema[index].name !== 'list'
-                ) {
-                  acc.push({
-                    name: column.name,
-                    type: column.type === 'BYTE_ARRAY' ? 'string' : 'number',
-                  })
-                }
-                return acc
-              },
-              [],
-            )
-
-            rowData.value = parquetData.map((row: any) =>
-              row.reduce((acc: any, value: any, index: number) => {
-                acc[columns[index].name] = value
-                return acc
-              }, {}),
-            )
-
-            colDefs.value = columnsToColDefs(columns, dataParam)
-          },
-        })
-      } catch (error) {
-        console.error('Fetch or read error:', error)
-      }
-    }
-    fetchData(dataParam.value)
+    fetchData(dataParam.value, rowData, colDefs)
 
     const agGrid = ref()
 
@@ -116,35 +99,6 @@ export default {
     const isSelected = (param: any) => {
       return dataParam.value === param
     }
-    const items = [
-      { title: 'Barbarian', dataParam: 'Barbarian.regular.grouped' },
-      { title: 'Barbarian unbeaten', dataParam: 'Barbarian.unbeaten.grouped' },
-      { title: 'Barbarian cheese', dataParam: 'Barbarian.cheese.grouped' },
-      { title: 'Raptors', dataParam: 'Raptors.regular.grouped' },
-      { title: 'Raptors unbeaten', dataParam: 'Raptors.unbeaten.grouped' },
-      { title: 'Raptors cheese', dataParam: 'Raptors.cheese.grouped' },
-      { title: 'Scavengers', dataParam: 'Scavengers.regular.grouped' },
-      {
-        title: 'Scavengers unbeaten',
-        dataParam: 'Scavengers.unbeaten.grouped',
-      },
-      { title: 'Scavengers cheese', dataParam: 'Scavengers.cheese.grouped' },
-      {
-        title: 'Barbarian PVE Rating',
-        rating: true,
-        dataParam: 'PveRating.Barbarian',
-      },
-      {
-        title: 'Raptors PVE Rating',
-        rating: true,
-        dataParam: 'PveRating.Raptors',
-      },
-      {
-        title: 'Scavengers PVE Rating',
-        rating: true,
-        dataParam: 'PveRating.Scavengers',
-      },
-    ]
 
     return {
       isSelected,
@@ -154,29 +108,28 @@ export default {
       defaultColDef,
       onFirstDataRendered,
       agGrid,
-      items,
+      views,
     }
   },
 }
 </script>
 
 <template>
-  <!-- The AG Grid component -->
   <div id="buttons">
     <button
-      v-for="item in items"
-      :key="item.dataParam"
-      :data-param="item.dataParam"
-      :class="{ selected: isSelected(item.dataParam) }"
+      v-for="(value, key) in views"
+      :key="key"
+      :data-param="key"
+      :class="{ selected: isSelected(key) }"
       @click="changeDataParam($event)"
     >
       <div class="icon-text-container">
         <span class="button-icon">
-          <v-icon v-if="item.rating" name="gi-trophy-cup" />
+          <v-icon v-if="value.rating" name="gi-trophy-cup" />
           <v-icon v-else name="fc-settings" />
         </span>
         <span class="button-title">
-          {{ item.title }}
+          {{ value.title }}
         </span>
       </div>
     </button>
@@ -261,12 +214,11 @@ button.selected {
 }
 .icon-text-container {
   display: flex;
-  align-items: center; /* Ensures vertical alignment if needed */
+  align-items: center;
 }
 
 .button-icon {
-  margin-left: 0.2rem; /* Adjust spacing between icon and text as needed */
-  margin-right: 0.4rem; /* Adjust spacing between icon and text as needed */
-  /* margin-top: 0.11rem; */
+  margin-left: 0.2rem;
+  margin-right: 0.4rem;
 }
 </style>

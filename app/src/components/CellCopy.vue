@@ -2,6 +2,7 @@
   <div class="cell-renderer">
     <!-- Transition element for copy button and checkmark icon -->
     <transition
+      v-if="params?.value"
       name="fade"
       @before-enter="beforeEnter"
       @enter="enter"

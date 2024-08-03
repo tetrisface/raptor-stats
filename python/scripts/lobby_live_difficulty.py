@@ -24,9 +24,9 @@ map_file = os.path.join(bar_dir, 'map.txt')
 
 ratings = {}
 for prefix in [
-    'PveRating.Barbarian_gamesettings.parquet',
-    'PveRating.Raptors_gamesettings.parquet',
-    'PveRating.Scavengers_gamesettings.parquet',
+    'Barbarian',
+    'Raptors',
+    'Scavengers',
 ]:
     x_key = f'PveRating.{prefix}_gamesettings.parquet'
     df = s3_download_df(FILE_SERVE_BUCKET, x_key)
@@ -39,37 +39,29 @@ for prefix in [
 
 
 def watch_file(file_path, callback, interval=1):
-    # Get the initial last modified time
     last_modified_time = os.path.getmtime(file_path)
 
     try:
         while True:
             time.sleep(interval)
             try:
-                # Check the current last modified time
                 current_modified_time = os.path.getmtime(file_path)
 
                 if current_modified_time != last_modified_time:
                     last_modified_time = current_modified_time
                     callback()
             except FileNotFoundError:
-                # Handle the case where the file might not exist temporarily
-                print(f'File {file_path} not found. Retrying...')
+                logger.error(f'File {file_path} not found. Retrying...')
     except KeyboardInterrupt:
-        print('Stopped watching the file.')
+        logger.info('lobby_live_difficulty.py stopped watching the file.')
 
-
-# with open('hnsw_index.pickle', 'rb') as file:
-#     ann_index = pickle.loads(file.read())
-# with open('hnsw_preprocessor.pickle', 'rb') as file:
-#     preprocessor = pickle.loads(file.read())
 
 prefixed_indices_preprocessors = {
     _prefix: get_hnsw_index(_prefix)
     for _prefix in ['Barbarian', 'Raptors', 'Scavengers']
 }
 
-for _prefix, index_preprocessor in prefixed_indices_preprocessors.items():
+for index_preprocessor in prefixed_indices_preprocessors.values():
     index_preprocessor.ann_index.set_ef(60000)
 
 logger.info('Loaded indices and preprocessors')
@@ -111,6 +103,8 @@ def on_modoptions():
         prefix = 'Scavengers'
     else:
         prefix = 'Raptors'
+
+    logger.info(f'{prefix} lobby')
 
     df = pl.DataFrame(modoptions).with_columns(
         pl.lit(map).alias('Map'), pl.lit(1).alias('scav_graceperiodmult')
@@ -160,7 +154,9 @@ def on_modoptions():
         )
         .cast(pl.String)
         .with_columns(
-            pl.all().str.replace_all(r'\.0+$', '').str.replace_all(r'^0$', '')
+            (~cs.matches('Difficulty|distance'))
+            .str.replace_all(r'\.0+$', '')
+            .str.replace_all(r'^0$', '')
         )
         .fill_null('')
     )
@@ -176,7 +172,9 @@ def on_modoptions():
         .mean()
         .with_columns(pl.col('Difficulty').round(1), pl.col('distance').round(1))
         .cast(pl.String)
-        .with_columns(pl.all().str.replace_all(r'\.0+$', ''))
+        .with_columns(
+            (~cs.matches('Difficulty|distance')).str.replace_all(r'\.0+$', '')
+        )
     )
 
 

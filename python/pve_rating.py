@@ -26,6 +26,7 @@ from common.common import (
     replay_details_file_name,
     s3_download_df,
     s3_upload_df,
+    user_ids_name_map,
 )
 from common.gamesettings import (
     gamesetting_equal_columns,
@@ -92,32 +93,6 @@ def main(*args):
             Body=buffer,
             StorageClass='INTELLIGENT_TIERING',
         )
-
-
-def user_ids_name_map(games):
-    logger.info('Making user id->player name mapping')
-    cols = (
-        games.sort('startTime', descending=False)
-        .select(
-            pl.col('AllyTeams')
-            .list.eval(
-                pl.element()
-                .struct['Players']
-                .list.eval(
-                    pl.struct(
-                        pl.element().struct['userId'].cast(pl.UInt32),
-                        pl.element().struct['name'],
-                    )
-                )
-                .flatten()
-                .drop_nulls()
-            )
-            .explode()
-        )
-        .unnest('AllyTeams')
-        .to_dict()
-    )
-    return {k: v for (k, v) in zip(cols['userId'], cols['name'])}
 
 
 def group_games_players(games):
@@ -546,6 +521,8 @@ def process_games(games, prefix):
         FILE_SERVE_BUCKET,
         prefix + '.all.grouped_gamesettings.parquet',
     )
+    if prefix == 'Scavengers':
+        invoke_lambda('RecentGames')
     s3_upload_df(
         grouped_gamesettings_export.filter(
             pl.col('Difficulty').is_between(0, 1, closed='none')
