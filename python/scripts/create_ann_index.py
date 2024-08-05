@@ -1,6 +1,5 @@
 import os
 import pickle
-import pprint
 from types import SimpleNamespace
 from typing import Counter, OrderedDict
 import hnswlib
@@ -51,6 +50,7 @@ def get_hnsw_index(prefix):
         'Win Replays',
         'Loss Replays',
         'Copy Paste',
+        cs.matches(r'[A-Z]+'),
     )
 
     categorical_cols = df.select(cs.string()).columns

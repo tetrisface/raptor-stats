@@ -49,7 +49,7 @@ if dev:
 
 # Interpolation with quadratic fit
 lobby_size_teammates_completion_fit_input = [1, 2, 5, 16]
-lobby_size_teammates_completion_fit_output = [1, 4, 14, 40]
+lobby_size_teammates_completion_fit_output = [1, 4, 11, 40]
 A = np.array([[x**2, x, 1] for x in lobby_size_teammates_completion_fit_input])
 b = np.array(lobby_size_teammates_completion_fit_output)
 (
@@ -84,15 +84,16 @@ def main(*args):
 
     s3 = boto3.client('s3')
 
-    with io.BytesIO() as buffer:
-        buffer.write(orjson.dumps(json_data))
-        buffer.seek(0)
-        s3.put_object(
-            Bucket=FILE_SERVE_BUCKET,
-            Key='pve_ratings.json',
-            Body=buffer,
-            StorageClass='INTELLIGENT_TIERING',
-        )
+    if FILE_SERVE_BUCKET:
+        with io.BytesIO() as buffer:
+            buffer.write(orjson.dumps(json_data))
+            buffer.seek(0)
+            s3.put_object(
+                Bucket=FILE_SERVE_BUCKET,
+                Key='pve_ratings.json',
+                Body=buffer,
+                StorageClass='INTELLIGENT_TIERING',
+            )
 
 
 def group_games_players(games):
@@ -523,26 +524,31 @@ def process_games(games, prefix):
     )
     if prefix == 'Scavengers':
         invoke_lambda('RecentGames')
+    difficulty_max = grouped_gamesettings_export['Difficulty'].max()
+    difficulty_min = grouped_gamesettings_export['Difficulty'].min()
+
     s3_upload_df(
         grouped_gamesettings_export.filter(
-            pl.col('Difficulty').is_between(0, 1, closed='none')
+            pl.col('Difficulty').is_between(
+                difficulty_min, difficulty_max, closed='none'
+            )
         ),
         FILE_SERVE_BUCKET,
         prefix + '.regular.grouped_gamesettings.parquet',
     )
     s3_upload_df(
-        grouped_gamesettings_export.filter(pl.col('Difficulty') == 1),
+        grouped_gamesettings_export.filter(pl.col('Difficulty') == difficulty_max),
         FILE_SERVE_BUCKET,
         prefix + '.unbeaten.grouped_gamesettings.parquet',
     )
     s3_upload_df(
-        grouped_gamesettings_export.filter(pl.col('Difficulty') == 0),
+        grouped_gamesettings_export.filter(pl.col('Difficulty') == difficulty_min),
         FILE_SERVE_BUCKET,
         prefix + '.cheese.grouped_gamesettings.parquet',
     )
 
-    logger.info('Creating export df')
-    group_df_sample = pl.concat(
+    logger.info('Creating diff_tiered_export_limited df')
+    diff_tiered_export_limited = pl.concat(
         [
             grouped_gamesettings_export.filter(pl.col('Difficulty') == 1)
             .sort('#Players', descending=True)
@@ -550,13 +556,13 @@ def process_games(games, prefix):
             grouped_gamesettings_export.filter(
                 pl.col('Difficulty').is_between(0, 1, closed='none')
             ),
-            grouped_gamesettings_export.filter(pl.col('Difficulty') == 0)
+            grouped_gamesettings_export.filter(pl.col('Difficulty') == difficulty_min)
             .sort('#Players', descending=True)
             .limit(10),
         ]
     )
 
-    group_df_sample = group_df_sample.with_columns(
+    diff_tiered_export_limited = diff_tiered_export_limited.with_columns(
         (
             pl.lit('=hyperlink("https://bar-rts.com/replays/')
             + pl.col('Win Replays').list.first()
@@ -587,14 +593,10 @@ def process_games(games, prefix):
         ).alias('Merged Loss Replays'),
     ).fill_null(' ')
 
-    push_gamesettings_export_df(group_df_sample, prefix)
-    del group_df_sample
+    push_gamesettings_sheet(diff_tiered_export_limited, prefix)
+    del diff_tiered_export_limited
 
     logger.info('Creating pve ratings')
-
-    # grouped_gamesettings = grouped_gamesettings.filter(
-    #     pl.col('Difficulty').is_between(0, 1, closed='none')
-    # )
 
     grouped_gamesettings_rating = grouped_gamesettings_rating.sort(
         by='#Players', descending=True
@@ -682,7 +684,7 @@ def process_games(games, prefix):
         .alias('#Settings'),
     )
 
-    logger.info('Continuing')
+    logger.info('Join basic aggregates')
     grouped_gamesettings_rating = (
         grouped_gamesettings_rating.join(
             basic_player_aggregates,
@@ -714,7 +716,7 @@ def process_games(games, prefix):
                 + pl.col('Difficulty Losers Sum Rank') * 0.4
                 + pl.col('Difficulty Rank') * 0.15
                 + pl.col('Setting Combinations Rank') * 0.01
-                + pl.col('#Games Rank') * 0.4
+                + pl.col('#Games Rank') * 0.5
                 + pl.col('Win Rate Rank') * 0.005
             )
             .rank()
@@ -766,17 +768,17 @@ def process_games(games, prefix):
     }
 
 
-def push_gamesettings_export_df(df, prefix):
+def push_gamesettings_sheet(df, prefix):
     if dev:
         spreadsheet_id = '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
         gc = gspread.service_account()
-        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
+        spreadsheet = gc.open_by_key(spreadsheet_id)
     else:
         spreadsheet_id = '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
         gc = gspread.service_account_from_dict(orjson.loads(get_secret()))
-        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
+        spreadsheet = gc.open_by_key(spreadsheet_id)
     gamesettings_worksheet = get_or_create_worksheet(
-        pve_rating_spreadsheet, prefix + ' Gamesettings'
+        spreadsheet, prefix + ' Gamesettings'
     )
     batch_requests = (
         [

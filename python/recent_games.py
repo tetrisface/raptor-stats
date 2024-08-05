@@ -96,6 +96,7 @@ def main(*args):
         )
         .drop(cs.ends_with('_right'))
         .sort('startTime', descending=True)
+        .rename({'startTime': 'Start Time', 'id': 'Replay ID'})
     )
 
     gamesetting_games = reorder_column(gamesetting_games, 11, 'Barbarian Handicap')

@@ -38,10 +38,18 @@ export class WebStack extends Stack {
       this,
       'FileServeCachePolicy',
       {
-        cachePolicyName: 'FileServeCachePolicy',
-        defaultTtl: Duration.minutes(30),
-        maxTtl: Duration.minutes(30),
-        minTtl: Duration.minutes(20),
+        defaultTtl: Duration.hours(3),
+        maxTtl: Duration.hours(3),
+      },
+    )
+
+    const cachePolicyDev = new aws_cloudfront.CachePolicy(
+      this,
+      'FileServeCachePolicyDev',
+      {
+        defaultTtl: Duration.minutes(2),
+        maxTtl: Duration.minutes(2),
+        minTtl: Duration.seconds(10),
       },
     )
 
@@ -57,7 +65,7 @@ export class WebStack extends Stack {
         origin: new aws_cloudfront_origins.S3Origin(bucket, {
           originAccessIdentity,
         }),
-        cachePolicy,
+        cachePolicy: id === 'WebStack' ? cachePolicy : cachePolicyDev,
         viewerProtocolPolicy:
           aws_cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },

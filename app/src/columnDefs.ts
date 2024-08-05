@@ -9,11 +9,11 @@ const nonPercentFLoat = (params: any) =>
 
 const setField = (
   target: { [key: string]: ColDef },
-  paths: string[],
+  keys: string[],
   source: ColDef,
 ) => {
-  for (const path of paths) {
-    _.set(target, path, _.merge(_.get(target, path), source))
+  for (const key of keys) {
+    _.set(target, key, _.merge(_.get(target, key), source))
   }
   return target
 }
@@ -41,28 +41,76 @@ export default function columnsToColDefs(
     {},
   )
 
+  _.set(
+    columnDefs['Award Rate'],
+    'headerTooltip',
+    'Weight: 0\n - Eco and Damage award summed (1+1) for all games with more than 1 player divided by the count of those games',
+  )
+  _.set(
+    columnDefs['Weighted Award Rate'],
+    'headerTooltip',
+    'Weight: 1\n - Same as Award Rate but also multiplied by the number of teammates in each game',
+  )
+  _.set(
+    columnDefs['Difficulty Record'],
+    'headerTooltip',
+    'Weight: ~0.075\n - Highest difficulty won (winners/players)',
+  )
+  _.set(
+    columnDefs['Difficulty Completion'],
+    'headerTooltip',
+    'Weight: ~0.075\n - The corresponding completion for the maximum value given by difficulty record * difficulty completion for each gamesetting. The completion is the amount of unique teammates in the gamesetting divided by a mapped value for each lobby size. Solo lobby win gives full completion. 16 player lobby wins requires 40 unique teammates. So 40% completion each 16 player win.',
+  )
+  _.set(
+    columnDefs['Difficulty Losers Sum'],
+    'headerTooltip',
+    'Weight: 0.4\n - Sum of unique players that lost to gamesettings won by the player',
+  )
+  _.set(
+    columnDefs['#Settings'],
+    'headerTooltip',
+    'Weight: 0.01\n - Unique settings',
+  )
+  _.set(
+    columnDefs['#Games'],
+    'headerTooltip',
+    'Weight: 0.4\n - Count of games played from 0 to 20',
+  )
+  _.set(columnDefs['Win Rate'], 'headerTooltip', 'Weight: 0.005\n - Wins/Games')
+  _.set(
+    columnDefs['Difficulty Rank'],
+    'headerTooltip',
+    '(Difficulty Record * Difficulty Completion) ranked',
+  )
+  _.set(
+    columnDefs['Combined Rank'],
+    'headerTooltip',
+    'Sum of ranks multplied by their weights',
+  )
+  _.set(
+    columnDefs['PVE Rating'],
+    'headerTooltip',
+    'Linear interpolation of Combined Rank',
+  )
+
   if (dataParam.includes('grouped') || dataParam == 'gamesetting_games') {
-    Object.entries(columnDefs).forEach(
-      ([columnName, columnDef]: [string, any]) => {
-        if (columnName.includes('Replays')) {
-          _.merge(columnDef, {
-            cellEditor: 'agLargeTextCellEditor',
-            cellRenderer: 'ReplayLink',
-            editable: false,
-            filter: false,
-          })
-        }
-        if (dataParam.includes('grouped')) {
-          _.set(
-            columnDef,
-            'pinned',
-            ['Winners', 'Players', 'Difficulty'].includes(columnName) ||
-              columnName.includes('#'),
-          )
-        }
+    setField(
+      columnDefs,
+      [
+        'Win Replays',
+        'Merged Win Replays',
+        'Loss Replays',
+        'Merged Loss Replays',
+      ],
+      {
+        cellEditor: 'agLargeTextCellEditor',
+        cellRenderer: 'ReplayLink',
+        editable: false,
+        filter: false,
       },
     )
-    _.set(columnDefs['AI'], 'width', 90)
+
+    _.set(columnDefs['AI'], 'width', 93)
     _.set(columnDefs['Result'], 'width', 100)
     _.set(columnDefs['Map'], 'width', 170)
     setField(columnDefs, ['#Winners', '#Players'], {
@@ -80,9 +128,7 @@ export default function columnsToColDefs(
       params.value ? (params.value * 100).toFixed(2) + '%' : undefined,
     )
 
-    setField(columnDefs, ['Date', 'startTime'], {
-      width: 192,
-    })
+    _.set(columnDefs['Start Time'], 'width', 192)
     _.set(columnDefs['Winners'], 'width', 110)
     _.set(columnDefs['Players'], 'width', 110)
     _.set(columnDefs['Win Replays'], 'width', 100)
@@ -105,9 +151,23 @@ export default function columnsToColDefs(
 
     if (dataParam.includes('grouped')) {
       setField(columnDefs, ['#Winners', '#Players'], {
-        width: 60,
+        width: 61,
         headerName: '#',
       })
+
+      setField(
+        columnDefs,
+        ['Winners', '#Winners', '#Players', 'Players', 'Difficulty'],
+        {
+          pinned: true,
+        },
+      )
+
+      _.set(
+        columnDefs['#Games'],
+        'headerTooltip',
+        'Weight: 0.4\n - Count of games played from 0 to 20',
+      )
     }
   }
 
@@ -124,7 +184,7 @@ export default function columnsToColDefs(
   if (dataParam.includes('grouped')) {
     moveItemInArray(columnsArray, '#Winners', 3)
     moveItemInArray(columnsArray, '#Players', 4)
-  } else {
+  } else if (dataParam.includes('Rating')) {
     moveItemInArray(columnsArray, 'Combined Rank', 1)
     moveItemInArray(columnsArray, 'PVE Rating', 2)
   }

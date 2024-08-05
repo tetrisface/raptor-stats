@@ -60,9 +60,17 @@ export default {
         : new URL(window.location.href).hash.slice(1),
     )
 
-    const changeDataParam = (event: any) => {
-      window.location.hash = dataParam.value =
-        event.currentTarget.getAttribute('data-param')
+    const navButtonClick = (event: any) => {
+      if (event.button === 1 || event.ctrlKey) {
+        window.open(
+          `/#${event.currentTarget.getAttribute('data-param')}`,
+          '_blank',
+        )
+        event.preventDefault()
+      } else {
+        window.location.hash = dataParam.value =
+          event.currentTarget.getAttribute('data-param')
+      }
     }
 
     watch(dataParam, (newParam) => {
@@ -77,16 +85,9 @@ export default {
       event.api.autoSizeColumns(
         colDefs.value.reduce((acc: string[], column) => {
           if (
-            !column.field.includes('Replays') &&
+            column.field &&
             !column.field.includes('tweak') &&
-            ![
-              'Difficulty',
-              '#Winners',
-              '#Players',
-              'Players',
-              'Winners',
-              'Copy Paste',
-            ].includes(column.field)
+            !/[A-Z]/.test(column.field)
           ) {
             acc.push(column.field)
           }
@@ -102,7 +103,7 @@ export default {
 
     return {
       isSelected,
-      changeDataParam,
+      handleClick: navButtonClick,
       rowData,
       colDefs,
       defaultColDef,
@@ -121,7 +122,8 @@ export default {
       :key="key"
       :data-param="key"
       :class="{ selected: isSelected(key) }"
-      @click="changeDataParam($event)"
+      @click="handleClick"
+      @mousedown="handleClick"
     >
       <div class="icon-text-container">
         <span class="button-icon">
@@ -139,6 +141,7 @@ export default {
       :rowData="rowData"
       :columnDefs="colDefs"
       :defaultColDef="defaultColDef"
+      :gridOptions="{ tooltipShowDelay: 800 }"
       @first-data-rendered="onFirstDataRendered"
       ref="agGrid"
       style="height: 100%; margin-bottom: 0.16rem"

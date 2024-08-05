@@ -339,11 +339,13 @@ higher_harder = {
     # 'ruins_only_t1',
     'scav_difficulty',
     'scav_spawntimemult',
+    # 'unit_restrictions_noendgamelrpc', # raptors and maybe scagengers
     'unit_restrictions_noextractors',
     'unit_restrictions_notech2',
     'unit_restrictions_notech3',
 }
 lower_harder = {
+    'accuratelasers',
     'assistdronesbuildpowermultiplier',
     'assistdronescount',
     'assistdronesenabled',
@@ -373,10 +375,6 @@ lower_harder = {
     'multiplier_weaponrange',
     #
     'unit_restrictions_nonukes',
-    # 'unit_restrictions_notacnukes',
-    # 'unit_restrictions_noendgamelrpc',
-    # 'unit_restrictions_nolrpc',
-    # 'unit_restrictions_noair',
     #
     'raptor_queentimemult',  # (Queen Hatching Time Multiplier) probably harder
     'raptor_graceperiodmult',

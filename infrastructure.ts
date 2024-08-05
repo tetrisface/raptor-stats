@@ -113,7 +113,7 @@ export class RaptorStatsStack extends Stack {
         code: imageAsset('pve_rating'),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 1900,
+        memorySize: 2200,
       },
     })
 
@@ -184,6 +184,25 @@ export class RaptorStatsStack extends Stack {
           },
         )
         .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
+
+      new aws_cloudwatch.Alarm(this, `${fun.node.id}MemoryUtilizationAlarm`, {
+        metric: new aws_cloudwatch.Metric({
+          namespace: 'AWS/Lambda',
+          metricName: 'MemoryUtilization',
+          dimensionsMap: {
+            FunctionName: fun.functionName,
+          },
+          statistic: 'max',
+          period: Duration.hours(3),
+        }),
+        threshold: 90, // 90% of allocated memory
+        evaluationPeriods: 6,
+        datapointsToAlarm: 3,
+        comparisonOperator:
+          aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        alarmDescription: `This alarm detects if the memory utilization of the Lambda function ${fun.functionName} is approaching the configured limit.`,
+      })
+
       if (fun.functionName !== 'Spreadsheet') {
         fun.logGroup.addMetricFilter(`-log-filter`, {
           filterPattern: {
