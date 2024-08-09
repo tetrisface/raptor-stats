@@ -21,7 +21,7 @@ executing==2.0.1; python_version >= '3.5'
 fastjsonschema==2.20.0
 frozenlist==1.4.1; python_version >= '3.8'
 fsspec==2024.6.1; python_version >= '3.8'
-google-auth==2.32.0; python_version >= '3.7'
+google-auth==2.33.0; python_version >= '3.7'
 google-auth-oauthlib==1.2.1; python_version >= '3.6'
 greenlet==3.0.3; python_version >= '3.7'
 gspread==6.1.2; python_version >= '3.8'
