@@ -35,10 +35,9 @@ body {
 #app {
   background-color: color-mix(in srgb, #fff, #2e3f57 55%);
   height: 100%;
-  margin: 0.2rem;
-  padding-bottom: 0.05rem;
-  margin-bottom: 0.3rem;
-  margin-top: 0.1rem;
+  margin: 0.2em;
+  margin-bottom: 0.2em;
+  margin-top: 0.1em;
   display: flex;
   flex-direction: column;
 }

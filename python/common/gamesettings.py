@@ -91,7 +91,7 @@ various = (
 
 defaults = {
     # Restrictions
-    'maxunits': 4000,  # 10000 default for nuttyb, 2000 game default, setting lower because I don't think it affects too much, 2000 is definitely too low
+    'maxunits': 4000,
     'unit_restrictions_nonukes': 0,
     'unit_restrictions_noextractors': 1,  # default for nuttyb (0 otherwise)
     'unit_restrictions_notacnukes': 0,
@@ -125,6 +125,7 @@ defaults = {
 
 rush_148 = {
     **defaults,
+    'maxunits': 4000,  # 10000 default for nuttyb, 2000 game default, setting lower because I don't think it affects too much, 2000 is definitely too low
     'multiplier_builddistance': 1.5,
     'multiplier_shieldpower': 2,
     #

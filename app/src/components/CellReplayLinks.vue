@@ -1,4 +1,3 @@
-<!-- ReplayLink.vue -->
 <template>
   <span
     ><a v-for="(url, index) in urls" :key="index" :href="url"

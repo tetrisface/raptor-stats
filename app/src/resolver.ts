@@ -1,17 +1,42 @@
 import { parquetMetadata, parquetRead } from 'hyparquet'
 import { compressors } from 'hyparquet-compressors'
 import columnsToColDefs from './columnDefs'
+import { FetchParams } from './types'
 
-export const fetchData = async (
-  dataParam: string,
-  rowData: any,
-  colDefs: any,
-) => {
+const JoinUrlParts = (baseUrl: string, ...paths: string[]): string => {
+  // Create a new URL object from the base URL
+  const url = new URL(baseUrl)
+
+  // Append each path segment to the URL object
+  paths.forEach((path) => {
+    url.pathname = `${url.pathname.replace(/\/$/, '')}/${path.replace(
+      /^\//,
+      '',
+    )}`
+  })
+
+  return url.toString()
+}
+
+const Capitalize = (str: string) => {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+export const fetchData = async (params: FetchParams) => {
+  const { view, ai, filter, rowData = {}, colDefs = {} } = params
+  let _file = 'gamesetting_games.parquet'
+  if (view === 'gamesettings') {
+    _file = `${Capitalize(ai.toString())}.${filter
+      .toString()
+      .replace('easy', 'cheese')}.grouped_gamesettings.parquet`
+  } else if (view === 'ratings') {
+    _file = `PveRating.${Capitalize(ai.toString())}_gamesettings.parquet`
+  }
+
   try {
     const response = await fetch(
-      `${import.meta.env.VITE_FILE_SERVE_HOST}/${dataParam}.parquet`,
+      JoinUrlParts(import.meta.env.VITE_FILE_SERVE_HOST, _file),
     )
-    response.ok || console.log('response.ok', response.ok, 'response', response)
 
     const arrayBuffer = await response.arrayBuffer()
     await parquetRead({
@@ -19,11 +44,13 @@ export const fetchData = async (
       compressors,
       onComplete: (parquetData: any) => {
         const schema = parquetMetadata(arrayBuffer).schema
+
         const columns = schema.reduce(
           (acc: { [key: string]: string }[], column, index) => {
-            index > 0 &&
-              schema[index].name !== 'item' &&
-              schema[index].name !== 'list' &&
+            ;(schema[index].type !== undefined ||
+              column.name == 'Top-5 Difficulties' ||
+              column.name.includes('Replays')) &&
+              schema[index]?.name !== 'element' &&
               acc.push({
                 name: column.name,
                 type: column.type === 'BYTE_ARRAY' ? 'string' : 'number',
@@ -35,12 +62,12 @@ export const fetchData = async (
 
         rowData.value = parquetData.map((row: any) =>
           row.reduce((acc: any, value: any, index: number) => {
-            acc[columns[index].name] = value
+            if (columns[index]) acc[columns[index].name] = value
             return acc
           }, {}),
         )
 
-        colDefs.value = columnsToColDefs(columns, dataParam)
+        colDefs.value = columnsToColDefs(columns, view, ai, filter)
       },
     })
   } catch (error) {

@@ -12,7 +12,6 @@ import {
   aws_lambda,
   aws_logs,
   aws_s3,
-  aws_secretsmanager,
   aws_sns,
   aws_sns_subscriptions,
 } from 'aws-cdk-lib'
@@ -57,12 +56,6 @@ export class RaptorStatsStack extends Stack {
       this,
       'ImportedBucket',
       webFileServeBucketName,
-    )
-
-    const gcpSecret = aws_secretsmanager.Secret.fromSecretCompleteArn(
-      this,
-      'raptor-gcp',
-      'arn:aws:secretsmanager:eu-north-1:190920611368:secret:raptor-gcp-x1EjkW',
     )
 
     const eventRuleRaptorStats = new aws_events.Rule(this, 'scheduleRule', {
@@ -113,7 +106,7 @@ export class RaptorStatsStack extends Stack {
         code: imageAsset('pve_rating'),
         functionName: 'PveRating',
         timeout: Duration.seconds(900),
-        memorySize: 2200,
+        memorySize: 3000,
       },
     })
 
@@ -121,25 +114,6 @@ export class RaptorStatsStack extends Stack {
     dataBucket.grantReadWrite(pveRating)
     dataBucketDev.grantReadWrite(pveRating)
     fileServeBucket.grantWrite(pveRating)
-
-    const spreadsheet = new aws_lambda.DockerImageFunction(
-      this,
-      'Spreadsheet',
-      {
-        ...lambdaProps,
-        ...{
-          code: imageAsset('spreadsheet'),
-          functionName: 'Spreadsheet',
-          timeout: Duration.seconds(500),
-          memorySize: 600,
-        },
-      },
-    )
-
-    spreadsheet.grantInvoke(raptorStats)
-    spreadsheet.grantInvoke(pveRating)
-    dataBucket.grantRead(spreadsheet)
-    dataBucketDev.grantRead(spreadsheet)
 
     const recentGames = new aws_lambda.DockerImageFunction(
       this,
@@ -168,7 +142,7 @@ export class RaptorStatsStack extends Stack {
     exceptionTopic.addSubscription(
       new aws_sns_subscriptions.EmailSubscription(process.env.ALARM_EMAIL),
     )
-    ;[raptorStats, pveRating, spreadsheet, recentGames].forEach((fun) => {
+    ;[raptorStats, pveRating, recentGames].forEach((fun) => {
       fun
         .metricErrors({
           period: Duration.minutes(1),
@@ -203,28 +177,25 @@ export class RaptorStatsStack extends Stack {
         alarmDescription: `This alarm detects if the memory utilization of the Lambda function ${fun.functionName} is approaching the configured limit.`,
       })
 
-      if (fun.functionName !== 'Spreadsheet') {
-        fun.logGroup.addMetricFilter(`-log-filter`, {
-          filterPattern: {
-            logPatternString: 'not casted cols',
-          },
-          metricNamespace: fun.functionName,
-          metricName: `${fun.functionName}-col-alarm`,
-          metricValue: '1',
+      fun.logGroup.addMetricFilter(`-log-filter`, {
+        filterPattern: {
+          logPatternString: 'not casted cols',
+        },
+        metricNamespace: fun.functionName,
+        metricName: `${fun.functionName}-col-alarm`,
+        metricValue: '1',
+      })
+      fun
+        .metricErrors({
+          period: Duration.minutes(1),
         })
-        fun
-          .metricErrors({
-            period: Duration.minutes(1),
-          })
-          .createAlarm(this, `${fun.functionName.toLowerCase()}-col-alarm`, {
-            threshold: 1,
-            evaluationPeriods: 1,
-            alarmDescription: `Exception on ${fun.functionName}`,
-            treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
-          })
-          .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
-        gcpSecret.grantRead(fun)
-      }
+        .createAlarm(this, `${fun.functionName.toLowerCase()}-col-alarm`, {
+          threshold: 1,
+          evaluationPeriods: 1,
+          alarmDescription: `Exception on ${fun.functionName}`,
+          treatMissingData: aws_cloudwatch.TreatMissingData.IGNORE,
+        })
+        .addAlarmAction(new aws_cloudwatch_actions.SnsAction(exceptionTopic))
     })
   }
 }

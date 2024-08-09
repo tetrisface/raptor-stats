@@ -1,0 +1,1402 @@
+{
+  "ranked_game": {
+    "name": "Ranked Game",
+    "type": "bool",
+    "section": "options_main",
+    "def": true,
+    "desc": "Should game results affect OpenSkill. Note that games with AI or games that are not balanced are always unranked.",
+    "key": "ranked_game"
+  },
+  "allowuserwidgets": {
+    "name": "Allow Custom Widgets",
+    "type": "bool",
+    "section": "options_main",
+    "def": true,
+    "desc": "Allow custom user widgets or disallow them",
+    "key": "allowuserwidgets"
+  },
+  "allowpausegameplay": {
+    "name": "Allow Commands While Paused",
+    "type": "bool",
+    "section": "options_main",
+    "def": true,
+    "desc": "Allow giving unit commands while paused",
+    "key": "allowpausegameplay"
+  },
+  "maxunits": {
+    "name": "Max Units Per Player",
+    "type": "number",
+    "key": "maxunits",
+    "step": 1,
+    "section": "options_main",
+    "def": 2000,
+    "desc": "Keep in mind there is an absolute limit of units, 32000, divided between each team. If you set this value higher than possible it will force itself down to the maximum it can be.",
+    "max": 32000,
+    "min": 500
+  },
+  "deathmode": {
+    "name": "Game End Mode",
+    "type": "list",
+    "section": "options_main",
+    "def": "com",
+    "desc": "What it takes to eliminate a team",
+    "items": {
+      "neverend": {
+        "name": "Never ending",
+        "desc": "Teams are never eliminated",
+        "key": "neverend"
+      },
+      "com": {
+        "name": "Kill all enemy Commanders",
+        "desc": "When a team has no Commanders left, it loses",
+        "key": "com"
+      },
+      "builders": {
+        "name": "Kill all Builders",
+        "desc": "When a team has no builders left, it loses",
+        "key": "builders"
+      },
+      "killall": {
+        "name": "Kill everything",
+        "desc": "Every last unit must be eliminated, no exceptions!",
+        "key": "killall"
+      },
+      "own_com": {
+        "name": "Player resign on Com death",
+        "desc": "When player commander dies, you auto-resign.",
+        "key": "own_com"
+      }
+    },
+    "key": "deathmode"
+  },
+  "draft_mode": {
+    "name": "Draft Spawn Order Mode",
+    "type": "list",
+    "section": "options_main",
+    "def": "random",
+    "desc": "Random/Captain/Skill/Fair based startPosType modes. Default: Random.",
+    "items": {
+      "disabled": {
+        "name": "Disabled",
+        "desc": "Disable draft mod. Fast-PC place first.",
+        "key": "disabled"
+      },
+      "random": {
+        "name": "Random Order",
+        "desc": "Players get to pick a start position with a delay in a random order.",
+        "key": "random"
+      },
+      "captain": {
+        "name": "Captains First",
+        "desc": "Captain picks first, then everyone else in a random order.",
+        "key": "captain"
+      },
+      "skill": {
+        "name": "Skill Order",
+        "desc": "Skill-based order, instead of random.",
+        "key": "skill"
+      },
+      "fair": {
+        "name": "After full team has loaded",
+        "desc": "Everyone must join the game first - after that (+2sec delay) everyone can place.",
+        "key": "fair"
+      }
+    },
+    "key": "draft_mode"
+  },
+  "teamcolors_anonymous_mode": {
+    "name": "Anonymous Mode",
+    "type": "list",
+    "section": "options_main",
+    "def": "disabled",
+    "desc": "Anonymize players by changing colors (based on chosen mode) and replacing names with question marks, making it harder to know who's who.",
+    "items": {
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      },
+      "global": {
+        "name": "Shuffle Globally",
+        "desc": "You can distinguish different players and everyone sees the same colors globally. Diplomacy is the same as usual except using colors instead of names (e.g. \"Red, let's ally against Blue\").",
+        "key": "global"
+      },
+      "local": {
+        "name": "Shuffle Locally",
+        "desc": "You can distinguish different players but everyone sees different colors locally. Diplomacy is harder but possible using positions (e.g. \"Southeast, let's ally against Northeast\").",
+        "key": "local"
+      },
+      "disco": {
+        "name": "Shuffle Locally (Continiously)",
+        "desc": "Same as local shuffle, except that colors are reshuffled every 2 mins for extra spicyness.",
+        "key": "disco"
+      },
+      "allred": {
+        "name": "Everyone Is Red",
+        "desc": "You cannot distinguish different players, they all have the same color (red by default, can be changed in accessibility settings). Diplomacy is very hard.",
+        "key": "allred"
+      }
+    },
+    "key": "teamcolors_anonymous_mode"
+  },
+  "unit_market": {
+    "name": "Unit Market",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Allow players to trade units. (Select unit, press 'For Sale' in order window or say /sell_unit in chat to mark the unit for sale. Double-click to buy from allies. T2cons show up in shop window!)",
+    "key": "unit_market"
+  },
+  "transportenemy": {
+    "name": "Enemy Transporting",
+    "hidden": true,
+    "type": "list",
+    "section": "options_main",
+    "def": "notcoms",
+    "desc": "Toggle which enemy units you can kidnap with an air transport",
+    "items": {
+      "notcoms": {
+        "name": "All But Commanders",
+        "desc": "Only commanders are immune to napping",
+        "key": "notcoms"
+      },
+      "none": {
+        "name": "Disallow All",
+        "desc": "No enemy units can be napped",
+        "key": "none"
+      }
+    },
+    "key": "transportenemy"
+  },
+  "teamffa_start_boxes_shuffle": {
+    "name": "Shuffle TeamFFA Start Boxes",
+    "type": "bool",
+    "section": "options_main",
+    "def": true,
+    "desc": "In TeamFFA games (more than 2 teams, excluding Raptors / Scavengers), start boxes will be randomly assigned to each team: team 1 might be assigned any start box rather than team 1 always being assigned start box 1.",
+    "key": "teamffa_start_boxes_shuffle"
+  },
+  "fixedallies": {
+    "name": "Disabled Dynamic Alliances",
+    "hidden": true,
+    "type": "bool",
+    "section": "options_main",
+    "def": true,
+    "desc": "Disables the possibility of players to dynamically change alliances ingame",
+    "key": "fixedallies"
+  },
+  "disablemapdamage": {
+    "name": "Disable Map Deformation",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Prevents the map shape from being changed by weapons",
+    "key": "disablemapdamage"
+  },
+  "disable_fogofwar": {
+    "name": "Disable Fog of War",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Fog of War",
+    "key": "disable_fogofwar"
+  },
+  "no_comtrans": {
+    "name": "T1 transports cant load commanders",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Commanders will be too heavy for tech 1 transports to carry. (Tech 2 transports can still carry)",
+    "key": "no_comtrans"
+  },
+  "slow_comtrans": {
+    "name": "Slower Transported Commanders",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Transports carrying commanders are significantly slower, limiting offensive use and reactive mobility",
+    "key": "slow_comtrans"
+  },
+  "unit_restrictions_notech2": {
+    "name": "Disable Tech 2",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Tech 2",
+    "key": "unit_restrictions_notech2"
+  },
+  "unit_restrictions_notech3": {
+    "name": "Disable Tech 3",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Tech 3",
+    "key": "unit_restrictions_notech3"
+  },
+  "unit_restrictions_noair": {
+    "name": "Disable Air Units",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Air Units",
+    "key": "unit_restrictions_noair"
+  },
+  "unit_restrictions_noextractors": {
+    "name": "Disable Metal Extractors",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Metal Extractors",
+    "key": "unit_restrictions_noextractors"
+  },
+  "unit_restrictions_noconverters": {
+    "name": "Disable Energy Converters",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Energy Converters",
+    "key": "unit_restrictions_noconverters"
+  },
+  "unit_restrictions_nonukes": {
+    "name": "Disable Nuclear Missiles",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Nuclear Missiles",
+    "key": "unit_restrictions_nonukes"
+  },
+  "unit_restrictions_notacnukes": {
+    "name": "Disable Tactical Nukes and EMPs",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Tactical Nukes and EMPs",
+    "key": "unit_restrictions_notacnukes"
+  },
+  "unit_restrictions_nolrpc": {
+    "name": "Disable Long Range Artilery (LRPC) structures",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Long Range Artilery (LRPC) structures",
+    "key": "unit_restrictions_nolrpc"
+  },
+  "unit_restrictions_noendgamelrpc": {
+    "name": "Disable Endgame Long Range Artilery (LRPC) structures (AKA lolcannons)",
+    "type": "bool",
+    "section": "options_main",
+    "def": false,
+    "desc": "Disable Endgame Long Range Artilery (LRPC) structures (AKA lolcannons)",
+    "key": "unit_restrictions_noendgamelrpc"
+  },
+  "map_tidal": {
+    "name": "Tidal Strength",
+    "hidden": true,
+    "type": "list",
+    "section": "options",
+    "def": "unchanged",
+    "desc": "Unchanged = map setting, low = 13e/sec, medium = 18e/sec, high = 23e/sec.",
+    "items": {
+      "unchanged": {
+        "name": "Unchanged",
+        "desc": "Use map settings",
+        "key": "unchanged"
+      },
+      "low": {
+        "name": "Low",
+        "desc": "Set tidal incomes to 13 energy per second",
+        "key": "low"
+      },
+      "medium": {
+        "name": "Medium",
+        "desc": "Set tidal incomes to 18 energy per second",
+        "key": "medium"
+      },
+      "high": {
+        "name": "High",
+        "desc": "Set tidal incomes to 23 energy per second",
+        "key": "high"
+      }
+    },
+    "key": "map_tidal"
+  },
+  "critters": {
+    "name": "Animal amount",
+    "type": "number",
+    "key": "critters",
+    "step": 0.2,
+    "hidden": true,
+    "section": "options",
+    "def": 1,
+    "desc": "This multiplier will be applied on the amount of critters a map will end up with",
+    "max": 2,
+    "min": 0
+  },
+  "map_atmosphere": {
+    "name": "Map Atmosphere and Ambient Sounds",
+    "hidden": true,
+    "type": "bool",
+    "section": "options",
+    "def": true,
+    "desc": "",
+    "key": "map_atmosphere"
+  },
+  "ffa_wreckage": {
+    "name": "FFA Mode Wreckage",
+    "hidden": true,
+    "type": "bool",
+    "section": "options",
+    "def": false,
+    "desc": "Killed players will blow up but leave wreckages",
+    "key": "ffa_wreckage"
+  },
+  "coop": {
+    "name": "Cooperative mode",
+    "hidden": true,
+    "type": "bool",
+    "section": "options",
+    "def": false,
+    "desc": "Adds extra commanders to id-sharing teams, 1 com per player",
+    "key": "coop"
+  },
+  "raptor_difficulty": {
+    "name": "Base Difficulty",
+    "type": "list",
+    "section": "raptor_defense_options",
+    "def": "normal",
+    "desc": "Raptors difficulty",
+    "items": {
+      "veryeasy": {
+        "name": "Very Easy",
+        "desc": "Very Easy",
+        "key": "veryeasy"
+      },
+      "easy": {
+        "name": "Easy",
+        "desc": "Easy",
+        "key": "easy"
+      },
+      "normal": {
+        "name": "Normal",
+        "desc": "Normal",
+        "key": "normal"
+      },
+      "hard": {
+        "name": "Hard",
+        "desc": "Hard",
+        "key": "hard"
+      },
+      "veryhard": {
+        "name": "Very Hard",
+        "desc": "Very Hard",
+        "key": "veryhard"
+      },
+      "epic": {
+        "name": "Epic",
+        "desc": "Epic",
+        "key": "epic"
+      }
+    },
+    "key": "raptor_difficulty"
+  },
+  "raptor_raptorstart": {
+    "name": "Hives Placement",
+    "type": "list",
+    "section": "raptor_defense_options",
+    "def": "initialbox",
+    "desc": "Control where hives spawn",
+    "items": {
+      "avoid": {
+        "name": "Avoid Players",
+        "desc": "Hives avoid player units",
+        "key": "avoid"
+      },
+      "initialbox": {
+        "name": "Initial Start Box",
+        "desc": "First wave spawns in raptor start box, following hives avoid players",
+        "key": "initialbox"
+      },
+      "alwaysbox": {
+        "name": "Always Start Box",
+        "desc": "Hives always spawn in raptor start box",
+        "key": "alwaysbox"
+      }
+    },
+    "key": "raptor_raptorstart"
+  },
+  "raptor_endless": {
+    "name": "Endless Mode",
+    "type": "bool",
+    "section": "raptor_defense_options",
+    "def": false,
+    "desc": "When you kill the queen, the game doesn't end, but loops around at higher difficulty instead, infinitely.",
+    "key": "raptor_endless"
+  },
+  "raptor_queentimemult": {
+    "name": "Queen Hatching Time Multiplier",
+    "type": "number",
+    "key": "raptor_queentimemult",
+    "step": 0.1,
+    "section": "raptor_defense_options",
+    "def": 1,
+    "desc": "(Range: 0.1 - 2). How quickly Queen Hatch goes from 0 to 100%",
+    "max": 2,
+    "min": 0.1
+  },
+  "raptor_spawncountmult": {
+    "name": "Unit Spawn Per Wave Multiplier",
+    "type": "number",
+    "key": "raptor_spawncountmult",
+    "step": 1,
+    "section": "raptor_defense_options",
+    "def": 1,
+    "desc": "(Range: 1 - 5). How many times more raptors will spawn per wave.",
+    "max": 5,
+    "min": 1
+  },
+  "raptor_firstwavesboost": {
+    "name": "First Waves Size Boost",
+    "type": "number",
+    "key": "raptor_firstwavesboost",
+    "step": 1,
+    "section": "raptor_defense_options",
+    "def": 1,
+    "desc": "(Range: 1 - 10). Intended to use with heavily modified settings. Makes first waves larger, the bigger the number the larger they are. Cools down within first few waves.",
+    "max": 10,
+    "min": 1
+  },
+  "raptor_spawntimemult": {
+    "name": "Waves Amount Multiplier",
+    "type": "number",
+    "key": "raptor_spawntimemult",
+    "step": 0.1,
+    "section": "raptor_defense_options",
+    "def": 1,
+    "desc": "(Range: 1 - 5). How often new waves will spawn. Bigger Number = More Waves",
+    "max": 5,
+    "min": 1
+  },
+  "raptor_graceperiodmult": {
+    "name": "Grace Period Time Multiplier",
+    "type": "number",
+    "key": "raptor_graceperiodmult",
+    "step": 0.1,
+    "section": "raptor_defense_options",
+    "def": 1,
+    "desc": "(Range: 0.1 - 3). Time before Raptors become active. ",
+    "max": 3,
+    "min": 0.1
+  },
+  "scav_difficulty": {
+    "name": "Base Difficulty",
+    "type": "list",
+    "section": "scav_defense_options",
+    "def": "normal",
+    "desc": "Scavs difficulty",
+    "items": {
+      "veryeasy": {
+        "name": "Very Easy",
+        "desc": "Very Easy",
+        "key": "veryeasy"
+      },
+      "easy": {
+        "name": "Easy",
+        "desc": "Easy",
+        "key": "easy"
+      },
+      "normal": {
+        "name": "Normal",
+        "desc": "Normal",
+        "key": "normal"
+      },
+      "hard": {
+        "name": "Hard",
+        "desc": "Hard",
+        "key": "hard"
+      },
+      "veryhard": {
+        "name": "Very Hard",
+        "desc": "Very Hard",
+        "key": "veryhard"
+      },
+      "epic": {
+        "name": "Epic",
+        "desc": "Epic",
+        "key": "epic"
+      }
+    },
+    "key": "scav_difficulty"
+  },
+  "scav_scavstart": {
+    "name": "Spawn Beacons Placement",
+    "type": "list",
+    "section": "scav_defense_options",
+    "def": "avoid",
+    "desc": "Control where spawners appear",
+    "items": {
+      "avoid": {
+        "name": "Avoid Players",
+        "desc": "Beacons avoid player units",
+        "key": "avoid"
+      },
+      "initialbox": {
+        "name": "Initial Start Box",
+        "desc": "First wave spawns in scav start box, following beacons avoid players",
+        "key": "initialbox"
+      },
+      "alwaysbox": {
+        "name": "Always Start Box",
+        "desc": "Beacons always spawn in scav start box",
+        "key": "alwaysbox"
+      }
+    },
+    "key": "scav_scavstart"
+  },
+  "scav_endless": {
+    "name": "Endless Mode",
+    "type": "bool",
+    "section": "scav_defense_options",
+    "def": false,
+    "desc": "When you kill the boss, the game doesn't end, but loops around at higher difficulty instead, infinitely.",
+    "key": "scav_endless"
+  },
+  "scav_bosstimemult": {
+    "name": "Boss Preparation Time Multiplier",
+    "type": "number",
+    "key": "scav_bosstimemult",
+    "step": 0.1,
+    "section": "scav_defense_options",
+    "def": 1,
+    "desc": "(Range: 0.1 - 2). How quickly Boss Anger goes from 0 to 100%.",
+    "max": 2,
+    "min": 0.1
+  },
+  "scav_spawncountmult": {
+    "name": "Unit Spawn Per Wave Multiplier",
+    "type": "number",
+    "key": "scav_spawncountmult",
+    "step": 1,
+    "section": "scav_defense_options",
+    "def": 1,
+    "desc": "(Range: 1 - 5). How many times more scavs will spawn per wave.",
+    "max": 5,
+    "min": 1
+  },
+  "scav_spawntimemult": {
+    "name": "Waves Amount Multiplier",
+    "type": "number",
+    "key": "scav_spawntimemult",
+    "step": 0.1,
+    "section": "scav_defense_options",
+    "def": 1,
+    "desc": "(Range: 1 - 5). How often new waves will spawn. Bigger Number = More Waves",
+    "max": 5,
+    "min": 1
+  },
+  "experimentalextraunits": {
+    "name": "Extra Units Pack",
+    "type": "bool",
+    "section": "options_extra",
+    "def": false,
+    "desc": "Formerly known as Scavenger units. Addon pack of units for Armada and Cortex, including various \"fun\" units",
+    "key": "experimentalextraunits"
+  },
+  "map_waterlevel": {
+    "name": "Water Level",
+    "type": "number",
+    "key": "map_waterlevel",
+    "step": 1,
+    "section": "options_extra",
+    "def": 0,
+    "desc": "Doesn't work if Map Deformation is disabled! <0 = Decrease water level, >0 = Increase water level",
+    "max": 10000,
+    "min": -10000
+  },
+  "map_waterislava": {
+    "name": "Water Is Lava",
+    "type": "bool",
+    "section": "options_extra",
+    "def": false,
+    "desc": "Turns water into Lava",
+    "key": "map_waterislava"
+  },
+  "ruins": {
+    "name": "Ruins",
+    "type": "list",
+    "section": "options_extra",
+    "def": "scav_only",
+    "desc": "Remains of the battles once fought",
+    "items": {
+      "enabled": {
+        "name": "Enabled",
+        "key": "enabled"
+      },
+      "scav_only": {
+        "name": "Enabled for Scavengers only",
+        "key": "scav_only"
+      },
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      }
+    },
+    "key": "ruins"
+  },
+  "ruins_density": {
+    "name": "Ruins: Density",
+    "type": "list",
+    "section": "options_extra",
+    "def": "normal",
+    "items": {
+      "verydense": {
+        "name": "Very Dense",
+        "key": "verydense"
+      },
+      "dense": {
+        "name": "Dense",
+        "key": "dense"
+      },
+      "normal": {
+        "name": "Normal",
+        "key": "normal"
+      },
+      "rare": {
+        "name": "Rare",
+        "key": "rare"
+      },
+      "veryrare": {
+        "name": "Very Rare",
+        "key": "veryrare"
+      }
+    },
+    "key": "ruins_density"
+  },
+  "ruins_only_t1": {
+    "name": "Ruins: Only Tech 1",
+    "type": "bool",
+    "section": "options_extra",
+    "def": false,
+    "key": "ruins_only_t1"
+  },
+  "ruins_civilian_disable": {
+    "name": "Ruins: Disable Civilian (Not Implemented Yet)",
+    "hidden": true,
+    "type": "bool",
+    "section": "options",
+    "def": false,
+    "key": "ruins_civilian_disable"
+  },
+  "lootboxes": {
+    "name": "Lootboxes",
+    "type": "list",
+    "section": "options_extra",
+    "def": "scav_only",
+    "desc": "Random drops of valuable stuff.",
+    "items": {
+      "enabled": {
+        "name": "Enabled",
+        "key": "enabled"
+      },
+      "scav_only": {
+        "name": "Enabled for Scavengers only",
+        "key": "scav_only"
+      },
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      }
+    },
+    "key": "lootboxes"
+  },
+  "lootboxes_density": {
+    "name": "Lootboxes: Density",
+    "type": "list",
+    "section": "options_extra",
+    "def": "normal",
+    "items": {
+      "normal": {
+        "name": "Normal",
+        "key": "normal"
+      },
+      "rare": {
+        "name": "Rare",
+        "key": "rare"
+      },
+      "veryrare": {
+        "name": "Very Rare",
+        "key": "veryrare"
+      }
+    },
+    "key": "lootboxes_density"
+  },
+  "evocom": {
+    "name": "Evolving Commanders Enabled",
+    "type": "bool",
+    "section": "options_extra",
+    "def": false,
+    "desc": "Commanders evolve, gaining new weapons and abilities.",
+    "key": "evocom"
+  },
+  "evocomlevelupmethod": {
+    "name": "Evolving Commanders: Leveling Method",
+    "type": "list",
+    "section": "options_extra",
+    "def": "dynamic",
+    "desc": "Dynamic: Commanders evolve to keep up with the highest power player. Timed: Static Evolution Rate",
+    "items": {
+      "dynamic": {
+        "name": "Dynamic",
+        "key": "dynamic"
+      },
+      "timed": {
+        "name": "Timed",
+        "key": "timed"
+      }
+    },
+    "key": "evocomlevelupmethod"
+  },
+  "evocomlevelcap": {
+    "name": "Evolving Commanders: Max Level",
+    "type": "number",
+    "key": "evocomlevelcap",
+    "step": 1,
+    "section": "options_extra",
+    "def": 10,
+    "desc": "(Range 2 - 10) Changes the Evolving Commanders maximum level",
+    "max": 10,
+    "min": 2
+  },
+  "evocomxpmultiplier": {
+    "name": "Evolving Commanders: Commander XP Multiplier - Does not affect leveling!",
+    "type": "number",
+    "key": "evocomxpmultiplier",
+    "step": 0.1,
+    "section": "options_extra",
+    "def": 1,
+    "desc": "(Range 0.1 - 10) Changes the rate at which Evolving Commanders gain Experience.",
+    "max": 10,
+    "min": 0.1
+  },
+  "evocomleveluprate": {
+    "name": "Evolving Commanders - Timed Only - Evolution Timer.",
+    "type": "number",
+    "key": "evocomleveluprate",
+    "step": 0.1,
+    "section": "options_extra",
+    "def": 5,
+    "desc": "(Range 0.1 - 20 Minutes) Rate at which commanders will evolve if Timed method is selected.",
+    "max": 20,
+    "min": 0.1
+  },
+  "comrespawn": {
+    "name": "Commander Respawning Enabled",
+    "type": "list",
+    "section": "options_extra",
+    "def": "evocom",
+    "desc": "Commanders can build one Effigy. The first one is free and given for you at the start. When the commander dies, the Effigy is sacrificed in its place.",
+    "items": {
+      "evocom": {
+        "name": "Evolving Commanders Only",
+        "key": "evocom"
+      },
+      "all": {
+        "name": "All Commanders",
+        "key": "all"
+      },
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      }
+    },
+    "key": "comrespawn"
+  },
+  "assistdronesenabled": {
+    "name": "Commander Drones Enabled",
+    "type": "list",
+    "section": "options_extra",
+    "def": "disabled",
+    "items": {
+      "enabled": {
+        "name": "Enabled",
+        "key": "enabled"
+      },
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      }
+    },
+    "key": "assistdronesenabled"
+  },
+  "assistdronesbuildpowermultiplier": {
+    "name": "Commander Drones: Buildpower Multiplier",
+    "type": "number",
+    "key": "assistdronesbuildpowermultiplier",
+    "step": 1,
+    "section": "options_extra",
+    "def": 1,
+    "desc": "(Range 0.5 - 5). How much buildpower commander drones should have",
+    "max": 5,
+    "min": 0.5
+  },
+  "assistdronescount": {
+    "name": "Commander Drones: Count",
+    "type": "number",
+    "key": "assistdronescount",
+    "step": 1,
+    "section": "options_extra",
+    "def": 10,
+    "desc": "How many assist drones per commander should be spawned",
+    "max": 30,
+    "min": 1
+  },
+  "assistdronesair": {
+    "name": "Commander Drones: Use Air Drones",
+    "type": "bool",
+    "section": "options_extra",
+    "def": true,
+    "desc": "Switch between aircraft drones and amphibious vehicle drones.",
+    "key": "assistdronesair"
+  },
+  "commanderbuildersenabled": {
+    "name": "Base Builder Turret Enabled",
+    "type": "list",
+    "section": "options_extra",
+    "def": "disabled",
+    "items": {
+      "enabled": {
+        "name": "Enabled",
+        "key": "enabled"
+      },
+      "disabled": {
+        "name": "Disabled",
+        "key": "disabled"
+      }
+    },
+    "key": "commanderbuildersenabled"
+  },
+  "commanderbuildersrange": {
+    "name": "Base Builder Turret: Buildrange",
+    "type": "number",
+    "key": "commanderbuildersrange",
+    "step": 1,
+    "section": "options_extra",
+    "def": 1000,
+    "desc": "(Range 500 - 2000).",
+    "max": 2000,
+    "min": 500
+  },
+  "commanderbuildersbuildpower": {
+    "name": "Base Builder Turret: Buildpower",
+    "type": "number",
+    "key": "commanderbuildersbuildpower",
+    "step": 1,
+    "section": "options_extra",
+    "def": 400,
+    "desc": "(Range 100 - 1000).",
+    "max": 1000,
+    "min": 100
+  },
+  "experimentalnoaircollisions": {
+    "name": "Aircraft Collisions Override",
+    "hidden": true,
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Aircraft Collisions Override",
+    "key": "experimentalnoaircollisions"
+  },
+  "experimentalxpgain": {
+    "name": "XP Gain Multiplier",
+    "type": "number",
+    "key": "experimentalxpgain",
+    "step": 0.1,
+    "hidden": true,
+    "section": "options_experimental",
+    "def": 1,
+    "desc": "XP Gain Multiplier",
+    "max": 10,
+    "min": 0.1
+  },
+  "experimentalstandardgravity": {
+    "name": "Gravity Override",
+    "type": "list",
+    "section": "options_experimental",
+    "def": "mapgravity",
+    "desc": "Override map gravity for weapons",
+    "items": {
+      "mapgravity": {
+        "name": "Map Gravity",
+        "desc": "Uses map defined gravity",
+        "key": "mapgravity"
+      },
+      "low": {
+        "name": "Low Gravity",
+        "desc": "80 gravity",
+        "key": "low"
+      },
+      "standard": {
+        "name": "Standard Gravity",
+        "desc": "120 gravity",
+        "key": "standard"
+      },
+      "high": {
+        "name": "High Gravity",
+        "desc": "150 gravity",
+        "key": "high"
+      }
+    },
+    "key": "experimentalstandardgravity"
+  },
+  "releasecandidates": {
+    "name": "Release Candidate Units",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Adds additional units to the game which are being considered for mainline integration and are balanced, or in end tuning stages.  Currently adds Printer, Shockwave (Arm T2 EMP Mex), and Drone Carriers for armada and cortex",
+    "key": "releasecandidates"
+  },
+  "accuratelasers": {
+    "name": "Accurate Lasers",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Removes inaccuracy vs moving units from all laser weapons as a proposed solution to overpowered scoutspam",
+    "key": "accuratelasers"
+  },
+  "experimentallegionfaction": {
+    "name": "Legion Faction",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "3rd experimental faction",
+    "key": "experimentallegionfaction"
+  },
+  "emprework": {
+    "name": "EMP Rework",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "EMP is changed to slow units movement and firerate, before eventually stunning.",
+    "key": "emprework"
+  },
+  "junorework": {
+    "name": "Juno Rework",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Juno stuns certain units (such as radars and jammers) rather than magically deleting them",
+    "key": "junorework"
+  },
+  "air_rework": {
+    "name": "Air Rework",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Prototype version with more maneuverable, slower air units and more differentiation between them.",
+    "key": "air_rework"
+  },
+  "proposed_unit_reworks": {
+    "name": "Proposed Unit Reworks",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Modoption used to test and balance unit reworks that are being considered for the base game.  Shuriken emp damage is reduced and Abductor emp damage and stuntime are reduced, but accuracy is increased.  EMP resist for units is standardized, and units that had low emp resists now take full emp damage.",
+    "key": "proposed_unit_reworks"
+  },
+  "energy_share_rework": {
+    "name": "Energy Share Rework",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Additional energy overflow/underflow mechanics. 10% of the energy income is re-distributed to prevent E-stalling.",
+    "key": "energy_share_rework"
+  },
+  "lategame_rebalance": {
+    "name": "Lategame Rebalance",
+    "hidden": true,
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "T2 defenses and anti-air is weaker, giving more time for late T2 strategies to be effective.  Early T3 unit prices increased. Increased price of calamity/ragnarock by 20% so late T3 has more time to be effective.",
+    "key": "lategame_rebalance"
+  },
+  "unified_maxslope": {
+    "name": "Standardized Land Unit Maxslope",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "All land units have minimum maxslope of 36",
+    "key": "unified_maxslope"
+  },
+  "norushtimer": {
+    "name": "No Rush Time",
+    "type": "number",
+    "key": "norushtimer",
+    "step": 1,
+    "section": "options_experimental",
+    "def": 0,
+    "desc": "(Range: 0 - 30). Minutes",
+    "max": 30,
+    "min": 0
+  },
+  "faction_limiter": {
+    "name": "Team Faction Limiter",
+    "hidden": true,
+    "type": "string",
+    "section": "options_experimental",
+    "def": "",
+    "desc": "Limit which faction a team may play. Format; list factions, seperating teams by a comma, e.g. \"armada cortex, legion\" = cor/arm vs legion.",
+    "key": "faction_limiter"
+  },
+  "skyshift": {
+    "name": "Skyshift: Air Rework",
+    "hidden": true,
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "A complete overhaul of air units and mechanics",
+    "key": "skyshift"
+  },
+  "forceallunits": {
+    "name": "Force Load All Units (For modders/devs)",
+    "type": "bool",
+    "section": "options_experimental",
+    "def": false,
+    "desc": "Load all UnitDefs even if ais or options for them aren't enabled",
+    "key": "forceallunits"
+  },
+  "shareddynamicalliancevictory": {
+    "name": "Dynamic Ally Victory",
+    "hidden": true,
+    "type": "bool",
+    "section": "options",
+    "def": false,
+    "desc": "Ingame alliance should count for game over condition.",
+    "key": "shareddynamicalliancevictory"
+  },
+  "ai_incomemultiplier": {
+    "name": "AI Income Multiplier",
+    "type": "number",
+    "key": "ai_incomemultiplier",
+    "step": 0.1,
+    "hidden": true,
+    "section": "options",
+    "def": 1,
+    "desc": "Multiplies AI resource income",
+    "max": 10,
+    "min": 1
+  },
+  "defaultdecals": {
+    "name": "Default Decals",
+    "hidden": true,
+    "type": "bool",
+    "section": "options_experimental",
+    "def": true,
+    "desc": "Use the default explosion decals instead of Decals GL4",
+    "key": "defaultdecals"
+  },
+  "teamcolors_icon_dev_mode": {
+    "name": "Icon Dev Mode ",
+    "type": "list",
+    "section": "dev",
+    "def": "disabled",
+    "desc": "(Don't use in normal games) Forces teamcolors to be an specific one, for all teams",
+    "items": {
+      "disabled": {
+        "name": "Disabled",
+        "desc": "description",
+        "key": "disabled"
+      },
+      "armblue": {
+        "name": "Armada Blue",
+        "desc": "description",
+        "key": "armblue"
+      },
+      "corred": {
+        "name": "Cortex Red",
+        "desc": "description",
+        "key": "corred"
+      },
+      "scavpurp": {
+        "name": "Scavenger Purple",
+        "desc": "description",
+        "key": "scavpurp"
+      },
+      "raptororange": {
+        "name": "Raptor Orange",
+        "desc": "description",
+        "key": "raptororange"
+      },
+      "gaiagray": {
+        "name": "Gaia Gray",
+        "desc": "description",
+        "key": "gaiagray"
+      },
+      "leggren": {
+        "name": "Legion Green",
+        "desc": "description",
+        "key": "leggren"
+      }
+    },
+    "key": "teamcolors_icon_dev_mode"
+  },
+  "debugcommands": {
+    "name": "Debug Commands",
+    "type": "string",
+    "section": "dev",
+    "def": "",
+    "desc": "A pipe separated list of commands to execute at [gameframe]:luarules fightertest|100:forcequit...",
+    "key": "debugcommands"
+  },
+  "animationcleanup": {
+    "name": "Animation Cleanup",
+    "type": "bool",
+    "section": "dev",
+    "def": false,
+    "desc": "Use animations from the BOSCleanup branch",
+    "key": "animationcleanup"
+  },
+  "mapmetadata_startpos": {
+    "name": "Map Metadata: StartPos",
+    "hidden": true,
+    "type": "string",
+    "section": "mapmetadata",
+    "def": "",
+    "desc": "StartPos configuration. Format is: base64url(zlib(json))",
+    "key": "mapmetadata_startpos"
+  },
+  "startmetal": {
+    "name": "Starting Metal",
+    "type": "number",
+    "key": "startmetal",
+    "step": 1,
+    "section": "options_cheats",
+    "def": 1000,
+    "desc": "(Range 0 - 10000). Determines amount of metal and metal storage that each player will start with",
+    "max": 10000,
+    "min": 0
+  },
+  "startmetalstorage": {
+    "name": "Starting Metal Storage",
+    "type": "number",
+    "key": "startmetalstorage",
+    "step": 1,
+    "section": "options_cheats",
+    "def": 1000,
+    "desc": "(Range 1000 - 20000). Only works if it's higher than Starting metal. Determines amount of metal and metal storage that each player will start with",
+    "max": 20000,
+    "min": 1000
+  },
+  "startenergy": {
+    "name": "Starting Energy",
+    "type": "number",
+    "key": "startenergy",
+    "step": 1,
+    "section": "options_cheats",
+    "def": 1000,
+    "desc": "(Range 0 - 10000). Determines amount of energy and energy storage that each player will start with",
+    "max": 10000,
+    "min": 0
+  },
+  "startenergystorage": {
+    "name": "Starting Energy Storage",
+    "type": "number",
+    "key": "startenergystorage",
+    "step": 1,
+    "section": "options_cheats",
+    "def": 1000,
+    "desc": "(Range 1000 - 20000). Only works if it's higher than Starting energy. Determines amount of energy and energy storage that each player will start with",
+    "max": 20000,
+    "min": 1000
+  },
+  "multiplier_resourceincome": {
+    "name": "Overall Resource Income Multiplier",
+    "type": "number",
+    "key": "multiplier_resourceincome",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10). Stacks up with the three options below.",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_metalextraction": {
+    "name": "Metal Extraction Multiplier ",
+    "type": "number",
+    "key": "multiplier_metalextraction",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10).",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_energyconversion": {
+    "name": "Energy Conversion Efficiency Multiplier ",
+    "type": "number",
+    "key": "multiplier_energyconversion",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 2). lower means you get less metal per energy converted",
+    "max": 2,
+    "min": 0.1
+  },
+  "multiplier_energyproduction": {
+    "name": "Energy Production Multiplier",
+    "type": "number",
+    "key": "multiplier_energyproduction",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10).",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_maxvelocity": {
+    "name": "Unit Max Velocity Multiplier",
+    "type": "number",
+    "key": "multiplier_maxvelocity",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10).",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_turnrate": {
+    "name": "Unit Turn Rate Multiplier",
+    "type": "number",
+    "key": "multiplier_turnrate",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10).",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_builddistance": {
+    "name": "Build Range Multiplier ",
+    "type": "number",
+    "key": "multiplier_builddistance",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.5 - 10).",
+    "max": 10,
+    "min": 0.5
+  },
+  "multiplier_buildpower": {
+    "name": "Build Power Multiplier",
+    "type": "number",
+    "key": "multiplier_buildpower",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10).",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_losrange": {
+    "name": "Vision Range Multiplier",
+    "type": "number",
+    "key": "multiplier_losrange",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.5 - 10).",
+    "max": 10,
+    "min": 0.5
+  },
+  "multiplier_radarrange": {
+    "name": "Radar And Sonar Range Multiplier",
+    "type": "number",
+    "key": "multiplier_radarrange",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.5 - 10).",
+    "max": 10,
+    "min": 0.5
+  },
+  "multiplier_weaponrange": {
+    "name": "Weapon Range Multiplier",
+    "type": "number",
+    "key": "multiplier_weaponrange",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.5 - 10).",
+    "max": 10,
+    "min": 0.5
+  },
+  "multiplier_weapondamage": {
+    "name": "Weapon Damage Multiplier ",
+    "type": "number",
+    "key": "multiplier_weapondamage",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10). Also affects unit death explosions.",
+    "max": 10,
+    "min": 0.1
+  },
+  "multiplier_shieldpower": {
+    "name": "Shield Power Multiplier",
+    "type": "number",
+    "key": "multiplier_shieldpower",
+    "step": 0.1,
+    "section": "options_cheats",
+    "def": 1,
+    "desc": "(Range 0.1 - 10)",
+    "max": 10,
+    "min": 0.1
+  },
+  "experimentalshields": {
+    "name": "Shield Type Override",
+    "type": "list",
+    "section": "options_cheats",
+    "def": "unchanged",
+    "desc": "Shield Type Override",
+    "items": {
+      "unchanged": {
+        "name": "Unchanged",
+        "desc": "Unchanged",
+        "key": "unchanged"
+      },
+      "absorbplasma": {
+        "name": "Absorb Plasma",
+        "desc": "Collisions Disabled",
+        "key": "absorbplasma"
+      },
+      "absorbeverything": {
+        "name": "Absorb Everything",
+        "desc": "Collisions Enabled",
+        "key": "absorbeverything"
+      },
+      "bounceeverything": {
+        "name": "Deflect Everything",
+        "desc": "Collisions Enabled",
+        "key": "bounceeverything"
+      }
+    },
+    "key": "experimentalshields"
+  },
+  "tweakunits": {
+    "name": "Tweak Units",
+    "type": "string",
+    "section": "options_cheats",
+    "def": "",
+    "desc": "For advanced users!!! A base64 encoded lua table of unit parameters to change.",
+    "hint": "Input must be base64",
+    "key": "tweakunits"
+  },
+  "tweakdefs": {
+    "name": "Tweak Defs",
+    "type": "string",
+    "section": "options_cheats",
+    "def": "",
+    "desc": "For advanced users!!! A base64 encoded snippet of code that modifies game definitions.",
+    "hint": "Input must be base64",
+    "key": "tweakdefs"
+  }
+}

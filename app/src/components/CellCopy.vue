@@ -1,5 +1,5 @@
 <template>
-  <div class="cell-renderer">
+  <div class="copy-cell">
     <!-- Transition element for copy button and checkmark icon -->
     <transition
       v-if="params?.value"
@@ -46,7 +46,7 @@ function beforeEnter(el: any) {
 }
 
 function enter(el: any, done: Function) {
-  el.offsetHeight // trigger reflow
+  el.offsetHeight() // trigger reflow
   el.style.transition = 'opacity 0.5s ease'
   el.style.opacity = 1
   done()
@@ -60,7 +60,7 @@ function leave(el: any, done: Function) {
 </script>
 
 <style scoped>
-.cell-renderer {
+.copy-cell {
   display: flex;
   align-items: center;
   gap: 2px;

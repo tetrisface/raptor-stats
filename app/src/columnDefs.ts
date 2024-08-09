@@ -1,5 +1,6 @@
 import _ from 'lodash'
 import { ColDef, ValueFormatterParams } from 'ag-grid-community'
+import { AIType, FilterType, ViewType } from './types'
 
 const percentFloat = (params: any) =>
   `${((params?.value ?? 0) * 100).toFixed(0)}%`
@@ -7,7 +8,7 @@ const percentFloat = (params: any) =>
 const nonPercentFLoat = (params: any) =>
   params.value?.toFixed(1).toString().replace(/\.0+$/, '').padEnd(4, ' ')
 
-const setField = (
+const setMerge = (
   target: { [key: string]: ColDef },
   keys: string[],
   source: ColDef,
@@ -20,7 +21,9 @@ const setField = (
 
 export default function columnsToColDefs(
   columns: any[],
-  dataParam: string,
+  view: ViewType,
+  ai?: AIType,
+  filter?: FilterType,
 ): any[] {
   const columnDefs = columns.reduce(
     (acc: { [key: string]: ColDef }, column) => {
@@ -51,16 +54,13 @@ export default function columnsToColDefs(
     'headerTooltip',
     'Weight: 1\n - Same as Award Rate but also multiplied by the number of teammates in each game',
   )
+
   _.set(
-    columnDefs['Difficulty Record'],
+    columnDefs['Difficulty Score'],
     'headerTooltip',
-    'Weight: ~0.075\n - Highest difficulty won (winners/players)',
+    'Weight: ~0.25\n - The sum of the highest difficulties*completions for each gamesetting, divided by 5. The completion is the amount of unique teammates in the gamesetting divided by a mapped value for each lobby size. Solo lobby win gives full completion. For example a 16 player lobby wins requires 40 unique teammates. So 40% completion each 16 player win. It is about 2-3 different lobbies that is needed for full completion.',
   )
-  _.set(
-    columnDefs['Difficulty Completion'],
-    'headerTooltip',
-    'Weight: ~0.075\n - The corresponding completion for the maximum value given by difficulty record * difficulty completion for each gamesetting. The completion is the amount of unique teammates in the gamesetting divided by a mapped value for each lobby size. Solo lobby win gives full completion. 16 player lobby wins requires 40 unique teammates. So 40% completion each 16 player win.',
-  )
+
   _.set(
     columnDefs['Difficulty Losers Sum'],
     'headerTooltip',
@@ -93,32 +93,17 @@ export default function columnsToColDefs(
     'Linear interpolation of Combined Rank',
   )
 
-  if (dataParam.includes('grouped') || dataParam == 'gamesetting_games') {
-    setField(
-      columnDefs,
-      [
-        'Win Replays',
-        'Merged Win Replays',
-        'Loss Replays',
-        'Merged Loss Replays',
-      ],
-      {
-        cellEditor: 'agLargeTextCellEditor',
-        cellRenderer: 'ReplayLink',
-        editable: false,
-        filter: false,
-      },
-    )
-
+  if (view == 'gamesettings' || view == 'recent_games') {
+    _.set(columnDefs['index'], 'hide', true)
     _.set(columnDefs['AI'], 'width', 93)
     _.set(columnDefs['Result'], 'width', 100)
     _.set(columnDefs['Map'], 'width', 170)
-    setField(columnDefs, ['#Winners', '#Players'], {
+    setMerge(columnDefs, ['#Winners', '#Players'], {
       width: 110,
     })
 
     _.set(columnDefs['Copy Paste'], 'cellEditor', 'agLargeTextCellEditor')
-    setField(columnDefs, ['Winners', 'Players'], {
+    setMerge(columnDefs, ['Winners', 'Players'], {
       cellEditor: 'agLargeTextCellEditor',
       width: 120,
     })
@@ -138,26 +123,26 @@ export default function columnsToColDefs(
     _.set(columnDefs['Copy Paste'], 'cellRenderer', 'CellCopy')
 
     _.set(columnDefs['Barbarian Handicap'], 'width', 160)
-    setField(columnDefs, ['Barbarian Per Player'], {
+    setMerge(columnDefs, ['Barbarian Per Player'], {
       valueFormatter: nonPercentFLoat,
       width: 180,
     })
 
-    if (dataParam.includes('gamesetting_games')) {
+    if (view == 'recent_games') {
       for (const value of Object.values(columnDefs)) {
         value && _.set(value, 'pinned', false)
       }
     }
 
-    if (dataParam.includes('grouped')) {
-      setField(columnDefs, ['#Winners', '#Players'], {
+    if (view == 'gamesettings') {
+      setMerge(columnDefs, ['#Winners', '#Players'], {
         width: 61,
         headerName: '#',
       })
 
-      setField(
+      setMerge(
         columnDefs,
-        ['Winners', '#Winners', '#Players', 'Players', 'Difficulty'],
+        ['Winners', '#Winners', 'Players', '#Players', 'Difficulty'],
         {
           pinned: true,
         },
@@ -168,23 +153,58 @@ export default function columnsToColDefs(
         'headerTooltip',
         'Weight: 0.4\n - Count of games played from 0 to 20',
       )
+      setMerge(
+        columnDefs,
+        [
+          'Win Replays',
+          'Merged Win Replays',
+          'Loss Replays',
+          'Merged Loss Replays',
+        ],
+        {
+          cellEditor: 'agLargeTextCellEditor',
+          cellRenderer: 'CellReplayLinks',
+          editable: false,
+          filter: false,
+        },
+      )
     }
   }
 
-  if (dataParam.includes('Rating')) {
-    columnDefs['Player'].pinned = true
-    columnDefs['Award Rate'].valueFormatter = percentFloat
-    columnDefs['Difficulty Record'].valueFormatter = percentFloat
-    columnDefs['Difficulty Completion'].valueFormatter = percentFloat
-    columnDefs['Win Rate'].valueFormatter = percentFloat
-    columnDefs['Weighted Award Rate'].valueFormatter = nonPercentFLoat
+  if (view == 'ratings') {
+    _.set(columnDefs['Player'], 'pinned', true)
+    _.set(columnDefs['PVE Rating'], 'valueFormatter', (params: any) =>
+      params.value?.toFixed(2).toString().replace(/\.0+$/, ''),
+    )
+    _.set(columnDefs['Award Rate'], 'valueFormatter', percentFloat)
+    setMerge(columnDefs, ['Difficulty Score'], {
+      valueFormatter: (params: any) =>
+        `${((params?.value ?? 0) * 100).toFixed(1)}`.replace(/\.0+$/, ''),
+      tooltipField: 'Top-5 Difficulties',
+      tooltipComponent: 'TooltipDifficultyScore',
+      tooltipComponentParams: {
+        view: view,
+        ai: ai,
+        filter: filter,
+      },
+      cellRenderer: 'CellInfo',
+    })
+    setMerge(columnDefs, ['Top-5 Difficulties'], {
+      valueFormatter: () => 'TBD',
+      hide: true,
+      valueParser: () => {
+        return 'TBD'
+      },
+    })
+    _.set(columnDefs['Win Rate'], 'valueFormatter', percentFloat)
+    _.set(columnDefs['Weighted Award Rate'], 'valueFormatter', nonPercentFLoat)
   }
 
   let columnsArray = Object.values(columnDefs)
-  if (dataParam.includes('grouped')) {
+  if (view === 'gamesettings') {
     moveItemInArray(columnsArray, '#Winners', 3)
     moveItemInArray(columnsArray, '#Players', 4)
-  } else if (dataParam.includes('Rating')) {
+  } else if (view === 'ratings') {
     moveItemInArray(columnsArray, 'Combined Rank', 1)
     moveItemInArray(columnsArray, 'PVE Rating', 2)
   }

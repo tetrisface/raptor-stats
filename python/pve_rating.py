@@ -1,12 +1,9 @@
-import datetime
 import io
 import os
-import random
 import re
 from types import SimpleNamespace
 
 import boto3
-import gspread
 import numpy as np
 import orjson
 import polars as pl
@@ -19,10 +16,8 @@ from common.cast_frame import (
 )
 from common.common import (
     FILE_SERVE_BUCKET,
-    READ_DATA_BUCKET,
-    WRITE_DATA_BUCKET,
-    get_secret,
     invoke_lambda,
+    READ_DATA_BUCKET,
     replay_details_file_name,
     s3_download_df,
     s3_upload_df,
@@ -36,10 +31,7 @@ from common.gamesettings import (
     barbarian_gamesetting_equal_columns,
 )
 from common.logger import get_logger, lambda_handler_decorator
-from spreadsheet import (
-    get_or_create_worksheet,
-    number_to_column_letter,
-)
+from common.modoptions import modoptions
 
 logger = get_logger()
 
@@ -47,6 +39,7 @@ dev = os.environ.get('ENV', 'prod') == 'dev'
 if dev:
     from bpdb import set_trace as s  # noqa: F401
 
+s()
 # Interpolation with quadratic fit
 lobby_size_teammates_completion_fit_input = [1, 2, 5, 16]
 lobby_size_teammates_completion_fit_output = [1, 4, 11, 40]
@@ -68,7 +61,9 @@ def main(*args):
     json_data = {
         'pve_ratings': {
             'BarbarianAI': process_games(
-                _games.filter('barbarian' & ~pl.col('raptors') & ~pl.col('scavengers')),
+                _games.filter(
+                    'barbarian' & ~pl.col('raptors') & ~pl.col('scavengers')
+                ).head(1000),
                 'Barbarian',
             ),
             'RaptorsAI': process_games(
@@ -109,7 +104,7 @@ def group_games_players(games):
         .rename({'players': 'Player'})
         .group_by('Player')
         .agg(
-            pl.len().alias('n_games'),
+            pl.len().cast(pl.UInt16, strict=True).alias('n_games'),
             pl.col('Player').is_in('winners').mean().alias('Win Rate'),
             pl.when(
                 pl.col('Player').is_in('winners')
@@ -130,6 +125,9 @@ def group_games_players(games):
             .mean()
             .fill_null(0.0)
             .alias('Weighted Award Rate'),
+        )
+        .with_columns(
+            cs.matches(r'\sRate$').cast(pl.Float32, strict=True),
         )
     )
 
@@ -277,7 +275,9 @@ def group_games_gamesettings(games, prefix):
 
         merge_games = games.filter(
             pl.col('id').ne(game['id']),
-            pl.col('nuttyb_hp').is_null() if game['nuttyb_hp'] is None else True,
+            pl.col('nuttyb_hp').is_null()
+            if 'nuttyb_hp' in game and game['nuttyb_hp'] is None
+            else True,
             *[
                 pl.col(x).eq(game[x])
                 for x in (_ai_gamesetting_equal_columns | {'Map Name'})
@@ -332,7 +332,9 @@ def group_games_gamesettings(games, prefix):
                     pl.col('winners_extended').flatten().drop_nulls().n_unique()
                     / pl.col('players_extended').flatten().drop_nulls().n_unique()
                 )
-            ).alias('Difficulty'),
+            )
+            .cast(pl.Float32, strict=True)
+            .alias('Difficulty'),
             pl.col('winners_extended')
             .sort_by('damage_award_value', descending=True)
             .flatten()
@@ -343,6 +345,7 @@ def group_games_gamesettings(games, prefix):
             .flatten()
             .drop_nulls()
             .n_unique()
+            .cast(pl.UInt16, strict=True)
             .alias('#Winners'),
             pl.col('players_extended')
             .sort_by('damage_award_value', descending=True)
@@ -354,6 +357,7 @@ def group_games_gamesettings(games, prefix):
             .flatten()
             .drop_nulls()
             .n_unique()
+            .cast(pl.UInt16, strict=True)
             .alias('#Players'),
             pl.when(pl.col(ai_win_column).eq(False))
             .then(pl.col('id'))
@@ -385,8 +389,8 @@ def group_games_gamesettings(games, prefix):
             .drop_nulls()
             .unique()
             .alias('winners_flat'),
-            pl.when(pl.col('winners').list.len() > 0)
-            .then(pl.col('winners'))
+            pl.when(pl.col('winners_extended').list.len() > 0)
+            .then(pl.col('winners_extended'))
             .sort_by('damage_award_value', descending=True)
             .drop_nulls()
             .alias('games_winners'),
@@ -419,8 +423,12 @@ def process_games(games, prefix):
     games = games.with_columns(
         pl.lit([]).alias('Merged Win Replays'),
         pl.lit([]).alias('Merged Loss Replays'),
-        winners=pl.col('winners').list.set_difference([prefix + 'AI']),
-        players=pl.col('players').list.set_difference([prefix + 'AI']),
+        winners=pl.col('winners')
+        .list.set_difference([prefix + 'AI'])
+        .cast(pl.List(pl.UInt32), strict=True),
+        players=pl.col('players')
+        .list.set_difference([prefix + 'AI'])
+        .cast(pl.List(pl.UInt32), strict=True),
     ).with_columns(
         winners_extended=pl.col('winners'),
         players_extended=pl.col('players'),
@@ -434,13 +442,19 @@ def process_games(games, prefix):
     ) = group_games_gamesettings(games, prefix)
     del games
 
+    grouped_gamesettings_rating = (
+        grouped_gamesettings_rating.rename({'Map Name': 'Map', 'winners': 'Winners'})
+        .sort(by=['Difficulty', '#Players', 'Map'], descending=[True, True, False])
+        .with_row_index()
+        .cast({'index': pl.UInt16}, strict=True)
+    )
+
     logger.info('Creating pastes')
     pastes = []
-    for index, row in enumerate(grouped_gamesettings_rating.iter_rows(named=True)):
+    for row in grouped_gamesettings_rating.iter_rows(named=True):
         row = {**non_unique_gamesetting_values, **row}
-        _str = (
-            '\n!preset coop\n!draft_mode disabled\n!unit_market 1\n!teamsize 16\n'
-            + (f'!map {row["Map Name"]}\n' if row['Map Name'] else '')
+        _str = '!preset coop\n!draft_mode disabled\n!unit_market 1\n!teamsize 16\n' + (
+            f'!map {row["Map"]}\n' if row['Map'] else ''
         )
 
         for key, value in row.items():
@@ -450,6 +464,11 @@ def process_games(games, prefix):
                 or key not in ai_gamesetting_all_columns
                 or value is None
                 or value == ''
+                or modoptions.get(key, {}).get('def') == value
+                or (
+                    value in {'0', 0, '1', 1}
+                    and bool(int(value)) == modoptions.get(key, {}).get('def')
+                )
             ):
                 continue
 
@@ -465,19 +484,22 @@ def process_games(games, prefix):
             else:
                 _str += f'!{key} {re.sub("\\.0\\s*$", "", str(value))}\n'
 
-        sheet_id = (
-            '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
-            if dev
-            else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
-        )
         nuttyb_link_str = (
             ' and https://docs.google.com/document/d/1ycQV-T__ilKeTKxbCyGjlTKw_6nmDSFdJo-kPmPrjIs'
             if 'nuttyb_hp' in row and row['nuttyb_hp'] is not None
             else ''
         )
+
+        web_filter = 'regular'
+        if row['Difficulty'] == 1:
+            web_filter = 'unbeaten'
+        elif row['Difficulty'] == 0:
+            web_filter = 'easy'
+
+        web_link = f'https://pverating.bar/?view=gamesettings&ai={prefix}&filter={web_filter}&row={row['index']}'
         pastes.append(
             _str
-            + f'$welcome-message Settings from http://docs.google.com/spreadsheets/d/{sheet_id}#gid=0&range=I{index+2}{nuttyb_link_str}\n'
+            + f'$welcome-message Settings from {web_link}{nuttyb_link_str}\n'
             + (
                 f'$rename [Modded] {prefix}\n'
                 if any(
@@ -486,10 +508,6 @@ def process_games(games, prefix):
                 else ''
             )
         )
-
-    grouped_gamesettings_rating = grouped_gamesettings_rating.rename(
-        {'Map Name': 'Map', 'winners': 'Winners'}
-    )
 
     grouped_gamesettings_export = grouped_gamesettings_rating.with_columns(
         pl.col('Winners')
@@ -502,6 +520,7 @@ def process_games(games, prefix):
         .list.join(', '),
         pl.Series(pastes).alias('Copy Paste'),
     )[
+        'index',
         'Difficulty',
         '#Winners',
         '#Players',
@@ -514,7 +533,7 @@ def process_games(games, prefix):
         'Copy Paste',
         'Map',
         *ai_gamesetting_all_columns,
-    ].sort(by=['Difficulty', '#Players', 'Map'], descending=[True, True, False])
+    ]
     del pastes
 
     s3_upload_df(
@@ -522,22 +541,30 @@ def process_games(games, prefix):
         FILE_SERVE_BUCKET,
         prefix + '.all.grouped_gamesettings.parquet',
     )
+
     if prefix == 'Scavengers':
         invoke_lambda('RecentGames')
+
     difficulty_max = grouped_gamesettings_export['Difficulty'].max()
     difficulty_min = grouped_gamesettings_export['Difficulty'].min()
 
+    regular = grouped_gamesettings_export.filter(
+        pl.col('Difficulty').is_between(difficulty_min, difficulty_max, closed='none')
+    )
+    unbeaten = grouped_gamesettings_export.filter(
+        pl.col('Difficulty') == difficulty_max
+    )
+
+    regular_offset = -len(unbeaten)
+    cheese_offset = -len(regular)
+
     s3_upload_df(
-        grouped_gamesettings_export.filter(
-            pl.col('Difficulty').is_between(
-                difficulty_min, difficulty_max, closed='none'
-            )
-        ),
+        regular,
         FILE_SERVE_BUCKET,
         prefix + '.regular.grouped_gamesettings.parquet',
     )
     s3_upload_df(
-        grouped_gamesettings_export.filter(pl.col('Difficulty') == difficulty_max),
+        unbeaten,
         FILE_SERVE_BUCKET,
         prefix + '.unbeaten.grouped_gamesettings.parquet',
     )
@@ -561,6 +588,7 @@ def process_games(games, prefix):
             .limit(10),
         ]
     )
+    del grouped_gamesettings_export
 
     diff_tiered_export_limited = diff_tiered_export_limited.with_columns(
         (
@@ -593,8 +621,7 @@ def process_games(games, prefix):
         ).alias('Merged Loss Replays'),
     ).fill_null(' ')
 
-    push_gamesettings_sheet(diff_tiered_export_limited, prefix)
-    del diff_tiered_export_limited
+    del diff_tiered_export_limited, regular, unbeaten
 
     logger.info('Creating pve ratings')
 
@@ -616,10 +643,11 @@ def process_games(games, prefix):
 
     logger.info('Adding teammates completion float')
 
-    def diff_comp(x):
+    def player_gamesettings_diff_comp_agg(x):
         diff_completions = []
         diff_goals = []
         completions = []
+        indices = []
         for player_gamesetting in x:
             winner_name = player_gamesetting['_player']
             gamesetting = player_gamesetting['']
@@ -658,29 +686,50 @@ def process_games(games, prefix):
             diff_completions.append(difficulty_goal * completion)
             diff_goals.append(difficulty_goal)
             completions.append(completion)
+            indices.append(
+                player_gamesetting['index']
+                + (regular_offset if difficulty_goal < 1 else 0)
+                + (cheese_offset if difficulty_goal == 0 else 0)
+            )
 
-        index = np.argmax(diff_completions)
-        return completions[index]
+        # Get the indices of the top k values
+        diff_completions = np.array(diff_completions)
+        k = min(5, len(diff_completions))
+        top_5_indices = np.argpartition(diff_completions, -k)[-k:]
+        top_5_indices = top_5_indices[np.argsort(diff_completions[top_5_indices])][::-1]
+
+        struct = {
+            'diffs': [np.float32(diff_goals[i]) for i in top_5_indices],
+            'completions': [np.float32(completions[i]) for i in top_5_indices],
+            'diff_completions': [
+                np.float32(diff_completions[i]) for i in top_5_indices
+            ],
+            'indices': [np.uint16(indices[i]) for i in top_5_indices],
+        }
+        return struct
 
     logger.info('Grouping by player and aggregating')
     grouped_gamesettings_rating = grouped_gamesettings_rating.group_by('Player').agg(
-        pl.col('Difficulty').max().alias('Difficulty Record'),
         pl.struct(
-            pl.col('Player').alias('_player'), pl.col('games_winners_diff').explode()
+            pl.col('Player').alias('_player'),
+            pl.col('games_winners_diff').explode(),
+            pl.col('index'),
         )
-        .map_elements(diff_comp, return_dtype=pl.Float32)
-        .alias('Difficulty Completion'),
+        .map_elements(player_gamesettings_diff_comp_agg, return_dtype=pl.Struct)
+        .alias('Top-5 Difficulties'),
         pl.when(pl.col('Player').is_in('winners_flat'))
         .then(pl.col('Players').list.set_difference(pl.col('winners_flat')))
         .otherwise(pl.lit([]))
         .flatten()
         .drop_nulls()
         .n_unique()
+        .cast(pl.UInt16, strict=True)
         .alias('Difficulty Losers Sum'),
         pl.when(pl.col('Player').is_in('winners_flat'))
         .then(1)
         .otherwise(0)
         .sum()
+        .cast(pl.UInt16, strict=True)
         .alias('#Settings'),
     )
 
@@ -696,14 +745,23 @@ def process_games(games, prefix):
         .drop(cs.ends_with('_right'))
         .drop_nulls('Player')
         .with_columns(
+            (
+                pl.col('Top-5 Difficulties').struct.field('diff_completions').list.sum()
+                / 5
+            )
+            .cast(pl.Float32, strict=True)
+            .alias('Difficulty Score'),
             pl.when(pl.col('n_games') > 20)
             .then(pl.lit('>20'))
             .otherwise(pl.col('n_games').clip(0, 20))
             .alias('#Games'),
             pl.col('Weighted Award Rate').rank().alias('Weighted Award Rate Rank'),
-            (pl.col('Difficulty Record') * pl.col('Difficulty Completion'))
+            (
+                pl.col('Top-5 Difficulties').struct.field('diff_completions').list.sum()
+                / 5
+            )
             .rank()
-            .alias('Difficulty Rank'),
+            .alias('Difficulty Score Rank'),
             pl.col('Difficulty Losers Sum').rank().alias('Difficulty Losers Sum Rank'),
             pl.col('n_games').clip(0, 20).rank().alias('#Games Rank'),
             pl.col('#Settings').rank().alias('Setting Combinations Rank'),
@@ -714,7 +772,7 @@ def process_games(games, prefix):
             (
                 pl.col('Weighted Award Rate Rank') * 1
                 + pl.col('Difficulty Losers Sum Rank') * 0.4
-                + pl.col('Difficulty Rank') * 0.15
+                + pl.col('Difficulty Score Rank') * 0.25
                 + pl.col('Setting Combinations Rank') * 0.01
                 + pl.col('#Games Rank') * 0.5
                 + pl.col('Win Rate Rank') * 0.005
@@ -722,6 +780,7 @@ def process_games(games, prefix):
             .rank()
             .alias('Combined Rank'),
         )
+        .with_columns(cs.matches(r' Rank$').cast(pl.UInt16, strict=True))
         .with_columns(
             (
                 (
@@ -730,6 +789,7 @@ def process_games(games, prefix):
                 )
                 * (30 - 0)
             )
+            .cast(pl.Float32, strict=True)
             .round(2)
             .alias('PVE Rating'),
             pl.col('Player').replace_strict(user_ids_names, return_dtype=pl.String),
@@ -745,6 +805,9 @@ def process_games(games, prefix):
         grouped_gamesettings_rating, 2, 'Weighted Award Rate'
     )
     grouped_gamesettings_rating = reorder_column(
+        grouped_gamesettings_rating, 3, 'Difficulty Score'
+    )
+    grouped_gamesettings_rating = reorder_column(
         grouped_gamesettings_rating, 7, '#Games'
     )
     grouped_gamesettings_rating = reorder_column(
@@ -752,12 +815,13 @@ def process_games(games, prefix):
     )
 
     logger.info('Updating sheets grouped_gamesettings')
-    update_sheets(grouped_gamesettings_rating, prefix=prefix)
+
     s3_upload_df(
         grouped_gamesettings_rating,
         FILE_SERVE_BUCKET,
         f'PveRating.{prefix}_gamesettings.parquet',
     )
+
     return {
         player: rating
         for player, rating in zip(
@@ -766,409 +830,6 @@ def process_games(games, prefix):
             .values()
         )
     }
-
-
-def push_gamesettings_sheet(df, prefix):
-    if dev:
-        spreadsheet_id = '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
-        gc = gspread.service_account()
-        spreadsheet = gc.open_by_key(spreadsheet_id)
-    else:
-        spreadsheet_id = '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
-        gc = gspread.service_account_from_dict(orjson.loads(get_secret()))
-        spreadsheet = gc.open_by_key(spreadsheet_id)
-    gamesettings_worksheet = get_or_create_worksheet(
-        spreadsheet, prefix + ' Gamesettings'
-    )
-    batch_requests = (
-        [
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': gamesettings_worksheet.id,
-                        'startColumnIndex': index,
-                        'endColumnIndex': index + 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'numberFormat': {
-                                'type': 'NUMBER',
-                                'pattern': '0.?;0.?;',  # https://developers.google.com/sheets/api/guides/formats#number_format_tokens
-                            }
-                        }
-                    },
-                    'fields': 'userEnteredFormat.numberFormat',
-                }
-            }
-            for index in filter(
-                None,
-                [
-                    df.get_column_index('raptor_spawntimemult')
-                    or df.get_column_index('scav_spawntimemult'),
-                    df.get_column_index('Barbarian Per Player'),
-                ],
-            )
-        ]
-        + [
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': gamesettings_worksheet.id,
-                        'startColumnIndex': col_index,
-                        'endColumnIndex': col_index + 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'numberFormat': {
-                                'type': 'NUMBER',
-                                'pattern': '#',
-                            },
-                            'horizontalAlignment': 'RIGHT',
-                        }
-                    },
-                    'fields': 'userEnteredFormat.numberFormat',
-                }
-            }
-            for col_index in filter(
-                None,
-                [
-                    df.get_column_index(x)
-                    for x in [
-                        'evocom',
-                        'experimentalextraunits',
-                        'experimentallegionfaction',
-                        'ruins_only_t1',
-                        'startenergy',
-                        'startenergystorage',
-                        'startmetal',
-                        'startmetalstorage',
-                    ]
-                    + [x for x in df.columns if 'unit_restrictions' in x]
-                ],
-            )
-        ]
-        + [
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': gamesettings_worksheet.id,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'textFormat': {
-                                'fontSize': 11,
-                            },
-                        }
-                    },
-                    'fields': 'userEnteredFormat.textFormat.fontSize',
-                }
-            },
-            {
-                'autoResizeDimensions': {
-                    'dimensions': {
-                        'sheetId': gamesettings_worksheet.id,
-                        'dimension': 'COLUMNS',
-                        'startIndex': df.columns.index('Map'),
-                        'endIndex': min(
-                            [df.columns.index(x) for x in df.columns if 'tweak' in x]
-                        ),
-                    },
-                }
-            },
-            {
-                'autoResizeDimensions': {
-                    'dimensions': {
-                        'sheetId': gamesettings_worksheet.id,
-                        'dimension': 'COLUMNS',
-                        'startIndex': max(
-                            [df.columns.index(x) for x in df.columns if 'tweak' in x]
-                        )
-                        + 1,
-                    },
-                }
-            },
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': gamesettings_worksheet.id,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'textFormat': {
-                                'fontSize': 10,
-                            },
-                            'hyperlinkDisplayType': 'LINKED',
-                        }
-                    },
-                    'fields': 'userEnteredFormat.textFormat.fontSize,userEnteredFormat.hyperlinkDisplayType',
-                }
-            },
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': gamesettings_worksheet.id,
-                        'startColumnIndex': df.get_column_index('Copy Paste'),
-                        'startRowIndex': 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'textFormat': {
-                                'fontSize': 9,
-                            },
-                        }
-                    },
-                    'fields': 'userEnteredFormat.textFormat.fontSize',
-                }
-            },
-        ],
-    )
-    key = f'spreadsheets/PveRating.{prefix}_gamesettings.parquet'
-    s3_upload_df(df, WRITE_DATA_BUCKET, key)
-
-    payload = {
-        'id': spreadsheet_id,
-        'sheet_name': prefix + ' Gamesettings',
-        'columns': [df.columns],
-        'parquet_bucket': WRITE_DATA_BUCKET,
-        'parquet_key': key,
-        'batch_requests': batch_requests,
-        'clear': not dev and random.randint(1, 10) == 1,
-        'notes': {
-            number_to_column_letter(df.get_column_index(a)): b
-            for a, b in [
-                (
-                    'Merged Win Replays',
-                    'Win replays with harder gamesettings',
-                ),
-                ('Merged Loss Replays', 'Loss replays with easier gamesettings'),
-            ]
-        },
-    }
-    del df
-
-    invoke_lambda('Spreadsheet', payload)
-
-
-def update_sheets(player_rating_df, prefix):
-    spreadsheet_id = (
-        '1L6MwCR_OWXpd3ujX9mIELbRlNKQrZxjifh4vbF8XBxE'
-        if dev
-        else '18m3nufi4yZvxatdvgS9SdmGzKN2_YNwg5uKwSHTbDOY'
-    )
-
-    if dev:
-        gc = gspread.service_account()
-        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
-    else:
-        gc = gspread.service_account_from_dict(orjson.loads(get_secret()))
-        pve_rating_spreadsheet = gc.open_by_key(spreadsheet_id)
-
-    pve_rating_worksheet = get_or_create_worksheet(
-        pve_rating_spreadsheet, prefix + ' PVE Rating'
-    )
-
-    percent_int_cols = [
-        player_rating_df.columns.index(x)
-        for x in [
-            'Award Rate',
-            'Difficulty Completion',
-            'Difficulty Record',
-            'Win Rate',
-        ]
-    ]
-
-    weighted_award_rate_col_index = player_rating_df.columns.index(
-        'Weighted Award Rate'
-    )
-    int_cols = [
-        index for index, x in enumerate(player_rating_df.columns) if 'Rank' in x
-    ] + [
-        player_rating_df.columns.index(x)
-        for x in ['Difficulty Losers Sum', '#Settings', '#Games']
-    ]
-    pve_rating_col_index = player_rating_df.columns.index('PVE Rating')
-
-    batch_requests = [
-        {
-            'updateSpreadsheetProperties': {
-                'properties': {
-                    'title': f'{'[DEV] ' if dev else ''}PVE Rating, updated: {datetime.datetime.now(datetime.UTC):%Y-%m-%d %H:%M} UTC, by tetrisface',
-                },
-                'fields': 'title',
-            }
-        },
-        {
-            'repeatCell': {
-                'range': {
-                    'sheetId': pve_rating_worksheet.id,
-                    'startColumnIndex': 0,
-                    'endColumnIndex': 1,
-                },
-                'cell': {
-                    'userEnteredFormat': {
-                        'horizontalAlignment': 'LEFT',
-                    }
-                },
-                'fields': 'userEnteredFormat.horizontalAlignment',
-            }
-        },
-        *[
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': pve_rating_worksheet.id,
-                        'startColumnIndex': col_index,
-                        'endColumnIndex': col_index + 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'numberFormat': {
-                                'type': 'PERCENT',  # https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/cells#numberformattype
-                                'pattern': '#%;#%;',  # https://developers.google.com/sheets/api/guides/formats#number_format_tokens
-                            },
-                        }
-                    },
-                    'fields': 'userEnteredFormat.numberFormat',  # NOSONAR
-                }
-            }
-            for col_index in percent_int_cols
-        ],
-        *[
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': sheet_id,
-                        'startColumnIndex': col_index,
-                        'endColumnIndex': col_index + 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'numberFormat': {
-                                'type': 'NUMBER',
-                                'pattern': '0.?;0.?;',  # https://developers.google.com/sheets/api/guides/formats#number_format_tokens
-                            }
-                        }
-                    },
-                    'fields': 'userEnteredFormat.numberFormat',
-                }
-            }
-            for (sheet_id, col_index) in [
-                (pve_rating_worksheet.id, weighted_award_rate_col_index),
-                (pve_rating_worksheet.id, pve_rating_col_index),
-            ]
-            if col_index is not None
-        ],
-        *[
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': pve_rating_worksheet.id,
-                        'startColumnIndex': col_index,
-                        'endColumnIndex': col_index + 1,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'numberFormat': {
-                                'type': 'NUMBER',
-                                'pattern': '#',
-                            },
-                            'horizontalAlignment': 'RIGHT',
-                        }
-                    },
-                    'fields': 'userEnteredFormat.numberFormat',
-                }
-            }
-            for col_index in int_cols
-        ],
-        *[
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': pve_rating_worksheet.id,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'textFormat': {
-                                'fontSize': 11,
-                            },
-                        }
-                    },
-                    'fields': 'userEnteredFormat.textFormat.fontSize',
-                }
-            },
-            {
-                'autoResizeDimensions': {
-                    'dimensions': {
-                        'sheetId': pve_rating_worksheet.id,
-                        'dimension': 'COLUMNS',
-                    },
-                }
-            },
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': pve_rating_worksheet.id,
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                            'textFormat': {
-                                'fontSize': 10,
-                            },
-                        }
-                    },
-                    'fields': 'userEnteredFormat.textFormat.fontSize',
-                }
-            },
-        ],
-    ]
-
-    key = f'spreadsheets/PveRating.{prefix}_pve_rating.parquet'
-    s3_upload_df(player_rating_df, WRITE_DATA_BUCKET, key)
-
-    payload = {
-        'id': spreadsheet_id,
-        'sheet_name': prefix + ' PVE Rating',
-        'columns': [player_rating_df.columns],
-        'parquet_bucket': WRITE_DATA_BUCKET,
-        'parquet_key': key,
-        'batch_requests': batch_requests,
-        'clear': True,
-        'notes': {
-            number_to_column_letter(player_rating_df.get_column_index(a)): b
-            for a, b in [
-                (
-                    'Award Rate',
-                    'Weight: 0\nEco and Damage award summed (1+1) for all games with more than 1 player divided by the count of those games',
-                ),
-                (
-                    'Weighted Award Rate',
-                    'Weight: 1\nSame as Award Rate but also multiplied by the number of teammates in each game',
-                ),
-                (
-                    'Difficulty Record',
-                    'Weight: ~0.075\nHighest difficulty won (winners/players)',
-                ),
-                (
-                    'Difficulty Completion',
-                    'Weight: ~0.075\nThe corresponding completion for the maximum value given by difficulty record * difficulty completion for each gamesetting. The completion is the amount of unique teammates in the gamesetting divided by a mapped value for each lobby size. Solo lobby win gives full completion. 16 player lobby wins requires 40 unique teammates. So 40% completion each 16 player win.',
-                ),
-                (
-                    'Difficulty Losers Sum',
-                    'Weight: 0.4\nSum of unique players that lost to gamesettings won by the player',
-                ),
-                ('#Settings', 'Weight: 0.01\nUnique settings'),
-                ('#Games', 'Weight: 0.4\nCount of games from 0 to 20'),
-                ('Win Rate', 'Weight: 0.005\nWins/Games'),
-                (
-                    'Difficulty Rank',
-                    '(Difficulty Record * Difficulty Completion) ranked',
-                ),
-                ('Combined Rank', 'Sum of ranks multplied by their weights'),
-                ('PVE Rating', 'Linear interpolation of Combined Rank'),
-            ]
-        },
-    }
-    invoke_lambda('Spreadsheet', payload)
 
 
 if __name__ == '__main__':

@@ -24,6 +24,7 @@ pyarrow = "*"
 pandas = "*"
 watchdog = "*"
 hnswlib = "*"
+lupa = "*"
 
 [dev-packages]
 

@@ -32,7 +32,9 @@ deploy-get-requirements:
 	echo "todo"
 
 deploy:
-	rm -rf cdk.out/* & ./clear_old_docker_images.sh
+	rm -rf cdk.out/* & \
+	./clear_old_docker_images.sh & \
+	(cd python && PIPENV_VERBOSITY=-1 pipenv run python -m scripts.lua_modoptions_json)
 	(cd app && bun run build)
 	@if [ -z "$(stack)" ]; then \
 		echo "Deploying all stacks"; \
@@ -42,21 +44,9 @@ deploy:
 		cdk deploy $(stack); \
 	fi
 
-
-
-deploy-lambda:
-	rm -rf cdk.out/*
-	cdk deploy RaptorStats
-
-deploy-app:
-	rm -rf cdk.out/*
-	(cd app && bun run build)
-	cdk deploy WebAppStack
-
 tail:
 	aws logs tail /aws/lambda/RaptorStats --follow & /
 	aws logs tail /aws/lambda/PveRating --follow & /
-	aws logs tail /aws/lambda/Spreadsheet --follow & /
 	aws logs tail /aws/lambda/RecentGames --follow
 
 
@@ -75,5 +65,6 @@ backup:
 
 update:
 	bunx npm-check-updates -i
-	pipenv update
+	(cd app && bunx npm-check-updates -i)
 	bun update -g aws-cdk ts-node
+	pipenv update

@@ -29,7 +29,6 @@ def grouped_gamesettings_preprocessor(numerical_cols, categorical_cols):
             (
                 'pca',
                 PCA(
-                    n_components=14,
                     random_state=random.seed(),
                 ),
             ),

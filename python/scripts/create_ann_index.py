@@ -28,7 +28,7 @@ def get_hnsw_index(prefix):
     )
     df = pl.read_parquet(
         os.path.join(LOCAL_DATA_DIR, f'{prefix}.all.grouped_gamesettings.parquet')
-    ).filter(pl.col('#Players') >= 30)
+    ).filter(pl.col('#Players') > 0)
 
     diffs = (
         df.select('Difficulty')

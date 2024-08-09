@@ -643,6 +643,7 @@ def cast_frame(df):
         *[
             pl.col(x).fill_null(0).alias(x)
             for x in [
+                'accuratelasers',
                 'april1',
                 'april1extra',
                 'easter_egg_hunt',

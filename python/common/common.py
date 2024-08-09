@@ -2,6 +2,7 @@ import importlib
 import os
 import re
 import tempfile
+import time
 import warnings
 from pathlib import Path
 
@@ -26,19 +27,6 @@ FILE_SERVE_BUCKET = os.environ.get('FILE_SERVE_BUCKET', 'pve-rating-web-file-ser
 LOCAL_DATA_DIR = os.environ.get(
     'LOCAL_DATA_DIR', os.path.join(Path(os.getcwd()).parent, 'var')
 )
-
-
-def get_secret():
-    secret_name = 'raptor-gcp'
-    region_name = 'eu-north-1'
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(service_name='secretsmanager', region_name=region_name)
-
-    get_secret_value_response = client.get_secret_value(SecretId=secret_name)
-
-    return get_secret_value_response['SecretString']
 
 
 def interpolate(value, in_min, in_max, out_min, out_max):
@@ -87,12 +75,23 @@ def s3_upload_df(df, bucket, key):
         with tempfile.SpooledTemporaryFile() as tmp_file:
             df.write_parquet(tmp_file)
             tmp_file.seek(0)
-            boto3.client('s3').upload_fileobj(
-                tmp_file,
-                bucket,
-                key,
-                ExtraArgs={'StorageClass': 'INTELLIGENT_TIERING'},
-            )
+            try:
+                boto3.client('s3').upload_fileobj(
+                    tmp_file,
+                    bucket,
+                    key,
+                    ExtraArgs={'StorageClass': 'INTELLIGENT_TIERING'},
+                )
+            except boto3.botocore.exceptions.EndpointConnectionError:
+                logger.error('failed to connect. Retrying.')
+                time.sleep(4)
+                tmp_file.seek(0)
+                boto3.client('s3').upload_fileobj(
+                    tmp_file,
+                    bucket,
+                    key,
+                    ExtraArgs={'StorageClass': 'INTELLIGENT_TIERING'},
+                )
 
 
 def s3_download_df(bucket, key):
